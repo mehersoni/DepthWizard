@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.npy
+*.pth
+*.bin
+*.tiff
+*.tif
