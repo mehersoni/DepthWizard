@@ -1,0 +1,66 @@
+# Python Cache & Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# IDE & OS Specific
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Machine Learning Checkpoints & Weights
+checkpoints/
+*.pth
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+*.onnx
+*.engine
+
+# Datasets & Zip Archives (Large Data)
+data/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+Potsdam.zip
+MADRID_HxGN-Content-Program_30cm/
+MADRID_HxGN-Content-Program_30cm.zip
+
+# Large Geotiffs, Images, & Rasters (Avoid committing media binaries)
+*.tif
+*.tiff
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+*.raw
+
+# Output Runs & Logs
+outputs/
+*.log
+*.tmp
+b64_out.txt
+ppt_structure_dump.txt
+verify_ppt_output.txt
+
+# SIH Presentation Templates (Keep clean repo)
+SIH_PPT_Template_IITMBS.pptx
+DepthWizard_SIH_Internal_Hackathon_Submission.pptx
+
+# Shadow-cue subfolder image/binary artifacts
+shadow-cue/demoImages/
+shadow-cue/output/

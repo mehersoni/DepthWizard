@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>DepthWizard — 3D Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+  :root{
+    --bg:#08080a;
+    --panel:#101012;
+    --panel2:#0c0c0e;
+    --line:#232327;
+    --line-soft:#1a1a1d;
+    --fg:#f4f3ef;
+    --fg-dim:#93938f;
+    --fg-faint:#4d4d4f;
+    --display:'Space Grotesk',sans-serif;
+    --body:'Inter',sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;scrollbar-color:#3a3a3d transparent;}
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:#2a2a2d;border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);-webkit-font-smoothing:antialiased;}
+  ::selection{background:var(--fg);color:var(--bg);}
+  button{font-family:var(--body);cursor:pointer;}
+  svg{display:block;}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important;scroll-behavior:auto !important;}}
+
+  /* =====================================================================
+     HERO — the beginning
+  ===================================================================== */
+  .hero-page{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    border-bottom:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-frame{max-width:1180px;margin:0 auto;padding:0 32px;width:100%;flex:1;display:flex;flex-direction:column;}
+
+  .hero-nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:26px 0 22px;
+    border-bottom:1px solid var(--line);
+  }
+  .hero-wordmark{
+    font-family:var(--display);
+    font-size:20px;
+    letter-spacing:0.02em;
+    font-weight:700;
+  }
+  .hero-meta{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--fg-dim);
+    letter-spacing:0.02em;
+    display:flex;
+    gap:22px;
+  }
+  .hero-meta b{color:var(--fg);font-weight:500;}
+
+  .hero-main{
+    position:relative;
+    flex:1;
+    display:flex;
+    align-items:center;
+    padding:60px 0 40px;
+  }
+  .hero-contours{
+    position:absolute;
+    right:-6%;
+    top:50%;
+    transform:translateY(-50%);
+    width:660px;
+    max-width:72%;
+    opacity:0.5;
+    pointer-events:none;
+  }
+  .hero-contours path{
+    fill:none;
+    stroke:var(--fg-faint);
+    stroke-width:1;
+  }
+  .hero-eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--fg-dim);
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    margin-bottom:20px;
+  }
+  .hero-h1{
+    font-family:var(--display);
+    font-weight:600;
+    font-size:clamp(38px,5.6vw,64px);
+    line-height:1.03;
+    margin:0 0 24px;
+    max-width:680px;
+    letter-spacing:-0.01em;
+  }
+  .hero-sub{
+    font-size:16.5px;
+    color:var(--fg-dim);
+    max-width:480px;
+    line-height:1.65;
+    margin:0 0 34px;
+  }
+  .hero-cta-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .hero-cta{
+    display:inline-flex;align-items:center;gap:9px;
+    background:var(--fg);color:var(--bg);
+    border:none;border-radius:9px;
+    padding:14px 22px;font-size:13.5px;font-weight:600;
+    font-family:var(--display);
+    transition:opacity .15s ease, transform .15s ease;
+  }
+  .hero-cta:hover{opacity:0.88;transform:translateY(-1px);}
+  .hero-cta svg{width:14px;height:14px;}
+  .hero-modes{
+    display:inline-flex;
+    border:1px solid var(--line);
+    border-radius:9px;
+    overflow:hidden;
+    font-family:var(--mono);
+    font-size:11.5px;
+  }
+  .hero-modes span{
+    padding:12px 15px;
+    color:var(--fg-dim);
+    letter-spacing:0.02em;
+  }
+  .hero-modes span.on{background:var(--panel);color:var(--fg);}
+  .hero-modes span + span{border-left:1px solid var(--line);}
+
+  .scroll-cue{
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding:20px 0 6px;
+    color:var(--fg-faint);
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+  }
+  .scroll-cue svg{width:15px;height:15px;animation:bob 1.8s infinite ease-in-out;}
+  @keyframes bob{0%,100%{transform:translateY(0);opacity:0.5;}50%{transform:translateY(5px);opacity:1;}}
+
+  /* =====================================================================
+     DASHBOARD — "as it is" reference section
+  ===================================================================== */
+  .dash-page{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(240,240,235,0.045), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(240,240,235,0.03), transparent 55%),
+      var(--bg);
+    padding:22px 0 46px;
+  }
+  .dash-app{max-width:1520px;margin:0 auto;padding:0 22px;}
+
+  .dash-app header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-bottom:14px;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand svg{width:30px;height:30px;}
+  .brand .titles{line-height:1.15;}
+  .brand .name{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:0.01em;}
+  .brand .tag{font-size:11px;color:var(--fg-dim);}
+
+  .stepper{display:flex;align-items:center;gap:6px;flex:1;justify-content:center;min-width:280px;}
+  .step{display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;min-width:64px;}
+  .step .circle{
+    width:26px;height:26px;border-radius:50%;
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:11px;color:var(--fg-dim);
+    background:var(--panel2);
+    transition:all .3s ease;
+  }
+  .step.done .circle{background:var(--fg);border-color:var(--fg);color:var(--bg);}
+  .step.active .circle{border-color:var(--fg);color:var(--fg);}
+  .step .slabel{font-size:10.5px;color:var(--fg-dim);white-space:nowrap;}
+  .step.done .slabel, .step.active .slabel{color:var(--fg);}
+  .step-line{flex:1;height:1px;background:var(--line);margin:0 2px;position:relative;top:-13px;min-width:16px;}
+  .step-line.done{background:var(--fg-faint);}
+
+  .head-right{display:flex;align-items:center;gap:14px;}
+  .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--fg-dim);}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,0.15);}
+  .btn-export{
+    display:flex;align-items:center;gap:7px;
+    background:var(--fg);color:var(--bg);
+    border:none;border-radius:7px;
+    padding:9px 14px;font-size:12.5px;font-weight:600;
+  }
+  .btn-export svg{width:13px;height:13px;}
+
+  .layout{display:grid;grid-template-columns:260px 1fr 280px;gap:14px;align-items:start;}
+  @media (max-width:1180px){.layout{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+  }
+  .card + .card{margin-top:14px;}
+  .card-title{
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;letter-spacing:0.07em;text-transform:uppercase;color:var(--fg-dim);
+    margin-bottom:14px;font-weight:600;
+  }
+  .card-title svg{width:13px;height:13px;opacity:0.8;}
+
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:8px;
+    padding:26px 14px;
+    text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    cursor:pointer;transition:border-color .2s, background .2s;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--fg-faint);background:var(--panel2);}
+  .dropzone svg{width:26px;height:26px;color:var(--fg-dim);}
+  .dropzone .dz-t{font-size:13px;font-weight:500;}
+  .dropzone .dz-s{font-size:11px;color:var(--fg-faint);}
+  .browse-btn{
+    margin-top:2px;background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+    border-radius:6px;padding:7px 14px;font-size:12px;
+  }
+  input[type=file]{display:none;}
+
+  .file-card{
+    margin-top:12px;background:var(--panel2);border:1px solid var(--line-soft);border-radius:8px;padding:12px;
+    font-size:12px;
+  }
+  .file-card .fname{display:flex;align-items:center;justify-content:space-between;font-weight:500;margin-bottom:8px;}
+  .file-card .fname .x{color:var(--fg-faint);cursor:pointer;}
+  .file-row{display:flex;align-items:center;gap:8px;color:var(--fg-dim);padding:3px 0;font-family:var(--mono);font-size:11px;}
+  .file-row svg{width:12px;height:12px;flex-shrink:0;}
+  .file-row .fval{color:var(--fg);margin-left:auto;}
+
+  .mode-opt{
+    display:flex;align-items:center;gap:9px;
+    padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+    font-size:12.5px;margin-bottom:8px;cursor:pointer;
+    transition:border-color .2s, background .2s;
+  }
+  .mode-opt.active{border-color:var(--fg-faint);background:var(--panel2);}
+  .mode-opt .radio{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--fg-faint);flex-shrink:0;position:relative;}
+  .mode-opt.active .radio::after{content:'';position:absolute;inset:2.5px;border-radius:50%;background:var(--fg);}
+  .mode-opt svg{width:14px;height:14px;color:var(--fg-dim);}
+
+  .process-btn{
+    width:100%;margin-top:6px;
+    background:var(--fg);color:var(--bg);border:none;border-radius:8px;
+    padding:12px;font-size:13px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .process-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .process-btn svg{width:12px;height:12px;}
+
+  .datasource-row{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:12px;color:var(--fg-dim);}
+  .datasource-row svg.ico{width:14px;height:14px;color:var(--fg-dim);flex-shrink:0;}
+  .datasource-row .check{margin-left:auto;width:13px;height:13px;color:#22c55e;}
+  .datasource-row.pending .check{color:var(--fg-faint);}
+
+  .tabs{display:flex;gap:2px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px;margin-bottom:12px;width:fit-content;}
+  .tab{
+    padding:7px 14px;font-size:12px;color:var(--fg-dim);border-radius:6px;background:none;border:none;
+    letter-spacing:0.02em;font-weight:500;
+  }
+  .tab.active{background:var(--fg);color:var(--bg);}
+
+  .main-view{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#000;aspect-ratio:16/10;}
+  .main-view canvas{width:100%;height:100%;object-fit:cover;display:block;}
+  
+  /* Custom 3D Cursor: Hand with glowing blue dot */
+  #webglCanvas {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg filter='drop-shadow(0px 1px 2px rgba(0,0,0,0.5))'%3E%3Cpath d='M11 13.5V6a2 2 0 0 1 4 0v7.5m0-4.5a2 2 0 0 1 4 0v4.5m0-2.5a2 2 0 0 1 4 0v3.5m0-1.5a2 2 0 0 1 4 0v6.5a6.5 6.5 0 0 1-6.5 6.5h-2a6.5 6.5 0 0 1-6.1-4.2L6.8 19.3a2 2 0 0 1 3-2.5l1.2.9' fill='%23ffffff' stroke='%2318181b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='17' cy='18.5' r='3.8' fill='%2338bdf8' stroke='%230284c7' stroke-width='1'/%3E%3Ccircle cx='17' cy='18.5' r='1.8' fill='%23ffffff'/%3E%3C/g%3E%3C/svg%3E") 16 18, grab, pointer !important;
+  }
+  #webglCanvas:active {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg filter='drop-shadow(0px 1px 2px rgba(0,0,0,0.5))'%3E%3Cpath d='M11 14.5V9a2 2 0 0 1 4 0v5.5m0-3a2 2 0 0 1 4 0v3m0-1.5a2 2 0 0 1 4 0v2.5m0 0a2 2 0 0 1 4 0v4a6.5 6.5 0 0 1-6.5 6.5h-2a6.5 6.5 0 0 1-6.1-4.2L6.8 20.3a2 2 0 0 1 3-2.5l1.2.9' fill='%23e2e8f0' stroke='%2318181b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='17' cy='18.5' r='3.8' fill='%230284c7' stroke='%230369a1' stroke-width='1'/%3E%3Ccircle cx='17' cy='18.5' r='1.8' fill='%23ffffff'/%3E%3C/g%3E%3C/svg%3E") 16 18, grabbing, pointer !important;
+  }
+
+  .view-label{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.06em;color:var(--fg-dim);background:rgba(10,10,10,0.6);padding:4px 8px;border-radius:5px;z-index:10;}
+  .view-controls{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px;z-index:10;}
+  .vc-btn{
+    width:28px;height:28px;border-radius:6px;background:rgba(19,19,20,0.85);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;color:var(--fg-dim);
+  }
+  .vc-btn svg{width:13px;height:13px;}
+  .cursor-hud{
+    position:absolute;bottom:10px;left:12px;
+    background:rgba(12,12,14,0.85);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:6px;
+    padding:5px 10px;font-family:var(--mono);font-size:11px;color:var(--fg-dim);
+    display:flex;gap:12px;z-index:10;pointer-events:none;
+  }
+  .cursor-hud strong{color:var(--fg);font-weight:500;}
+
+  .sub-panels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;}
+  @media (max-width:760px){.sub-panels{grid-template-columns:1fr;}}
+  .sub-panel{border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;}
+  .sp-head{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;font-family:var(--mono);font-size:10.5px;letter-spacing:0.05em;text-transform:uppercase;color:var(--fg-dim);border-bottom:1px solid var(--line-soft);}
+  .sp-body{position:relative;aspect-ratio:1/1;background:#000;}
+  .sp-body canvas{width:100%;height:100%;display:block;}
+  .legend{position:absolute;right:8px;top:8px;bottom:8px;width:14px;border-radius:3px;background:linear-gradient(to bottom, #fff, #000);border:1px solid rgba(255,255,255,0.15);}
+  .legend-tag{position:absolute;right:26px;font-family:var(--mono);font-size:9px;color:var(--fg-dim);}
+  .legend-tag.top{top:8px;}
+  .legend-tag.bottom{bottom:8px;}
+
+  .stat2x2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-box{border:1px solid var(--line);border-radius:8px;padding:11px 12px;background:var(--panel2);}
+  .stat-box .slabel2{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--fg-dim);margin-bottom:6px;}
+  .stat-box .slabel2 svg{width:12px;height:12px;}
+  .stat-box .sval{font-family:var(--display);font-size:19px;font-weight:600;}
+
+  .calib-row{display:flex;align-items:center;gap:9px;padding:7px 0;font-size:12px;}
+  .calib-row svg.ico{width:14px;height:14px;color:var(--fg-dim);flex-shrink:0;}
+  .calib-row .cname{color:var(--fg-dim);flex:1;}
+  .calib-row .cweight{font-family:var(--mono);font-size:11px;color:var(--fg);}
+
+  .range-wrap{margin-top:6px;}
+  .range-label-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;}
+  .range-label-row .rname{color:var(--fg-dim);}
+  .range-label-row .rval{font-family:var(--mono);color:var(--fg);}
+  .range-track{position:relative;height:4px;background:var(--line);border-radius:2px;margin-bottom:6px;}
+  .range-fill{position:absolute;height:100%;background:var(--fg);border-radius:2px;}
+  .range-ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--fg-faint);}
+
+  .cmp-row{margin-bottom:11px;}
+  .cmp-row:last-child{margin-bottom:0;}
+  .cmp-top{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px;}
+  .cmp-top .cmpname{color:var(--fg-dim);}
+  .cmp-top .cmpval{font-family:var(--mono);color:var(--fg);}
+  .cmp-bar-track{height:5px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .cmp-bar-fill{height:100%;background:var(--fg-faint);border-radius:3px;}
+  .cmp-row.best .cmp-bar-fill{background:var(--fg);}
+
+  .bottom-row{display:grid;grid-template-columns:1.1fr 1.6fr 1fr;gap:14px;margin-top:14px;}
+  @media (max-width:1180px){.bottom-row{grid-template-columns:1fr;}}
+
+  .val-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .val-box{border:1px solid var(--line);border-radius:8px;padding:11px 12px;background:var(--panel2);}
+  .val-box .vlabel{font-size:10px;color:var(--fg-dim);letter-spacing:0.03em;margin-bottom:6px;}
+  .val-box .vval{font-family:var(--display);font-size:18px;font-weight:600;}
+
+  .elev-legend{display:flex;gap:16px;font-size:11px;color:var(--fg-dim);margin-bottom:8px;}
+  .elev-legend span{display:flex;align-items:center;gap:6px;}
+  .elev-legend .swatch{width:14px;height:2px;background:var(--fg);}
+  .elev-legend .swatch.dashed{background:none;border-top:2px dashed var(--fg-faint);}
+
+  .controls-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  @media (max-width:500px){.controls-grid{grid-template-columns:repeat(3,1fr);}}
+  .ctrl-box{
+    border:1px solid var(--line);border-radius:8px;padding:12px 6px;
+    display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--panel2);
+  }
+  .ctrl-box svg{width:16px;height:16px;color:var(--fg-dim);}
+  .ctrl-box .cl{font-size:10.5px;color:var(--fg-dim);}
+
+.demo-topnav{max-width:1520px;margin:0 auto 14px;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.demo-topnav a{color:var(--fg);text-decoration:none;font-family:var(--display);font-weight:600;font-size:13px}.demo-topnav .back{color:var(--fg-dim);font-family:var(--mono);font-size:11px}
+</style></head><body>
+<div class="dash-page" id="dashboard"><div class="dash-app">
+<div class="demo-topnav"><a href="index.html">← DEPTHWIZARD</a><span class="back">3D RECONSTRUCTION CONSOLE</span></div>
+
+<div class="dash-app">
+
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 20L9 8l4 7 2-3 6 8H3z"/></svg>
+      <div class="titles">
+        <div class="name">DEPTHWIZARD</div>
+        <div class="tag">Single-View Elevation &amp; 3D Reconstruction</div>
+      </div>
+    </div>
+
+    <div class="stepper" id="stepper">
+      <div class="step" data-i="0"><div class="circle">1</div><div class="slabel">Input</div></div>
+      <div class="step-line" data-i="0"></div>
+      <div class="step" data-i="1"><div class="circle">2</div><div class="slabel">Depth Estimation</div></div>
+      <div class="step-line" data-i="1"></div>
+      <div class="step" data-i="2"><div class="circle">3</div><div class="slabel">Scale Calibration</div></div>
+      <div class="step-line" data-i="2"></div>
+      <div class="step" data-i="3"><div class="circle">4</div><div class="slabel">DSM Generation</div></div>
+      <div class="step-line" data-i="3"></div>
+      <div class="step" data-i="4"><div class="circle">5</div><div class="slabel">3D Reconstruction</div></div>
+    </div>
+
+    <div class="head-right">
+      <div class="status"><span class="dot"></span><span id="statusText">System Ready</span></div>
+      <button class="btn-export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>Export</button>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <div class="col-left">
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>INPUT</div>
+        <div class="dropzone" id="dropzone" tabindex="0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4 4 0 01-1-7.9A5 5 0 0116 8a4.5 4.5 0 011 8.9"/><path d="M12 12v7m0-7l-3 3m3-3l3 3"/></svg>
+          <div class="dz-t">Drag &amp; Drop Image</div>
+          <div class="dz-s">or</div>
+          <button class="browse-btn" type="button">Browse Files</button>
+          <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.tif,.tiff">
+        </div>
+
+        <div class="file-card" id="fileCard" style="display:none;">
+          <div class="fname"><span id="fnameText">scene_01.tif</span><span class="x" id="removeFile">&#10005;</span></div>
+          <div class="file-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Type<span class="fval" id="ftype">GeoTIFF</span></div>
+          <div class="file-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Size<span class="fval" id="fsize">12.4 MB</span></div>
+          <div class="file-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></svg>CRS<span class="fval" id="fcrs">Pending...</span></div>
+          <div class="file-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l6-16 4 10 3-6 3 12"/></svg>Resolution<span class="fval" id="fres">—</span></div>
+          <div class="file-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>Dimensions<span class="fval" id="fdims">—</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="5"/></svg>MODE</div>
+        <div class="mode-opt active" id="modeGeoOpt">
+          <div class="radio"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></svg>
+          Metric DSM (Georeferenced)
+        </div>
+        <div class="mode-opt" id="modeRelOpt">
+          <div class="radio"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>
+          Relative DSM (Non-georeferenced)
+        </div>
+        <button class="process-btn" id="processBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Process Image
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>DATA SOURCES</div>
+        <div class="datasource-row" id="dsDepth">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg>
+          Depth Anything V2
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div class="datasource-row pending" id="dsShadow">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/></svg>
+          Shadow Constraint
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div class="datasource-row pending" id="dsDEM">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-9 4 6 3-5 6 8"/></svg>
+          DEM / SRTM
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-center">
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="overview">OVERVIEW</button>
+        <button class="tab" data-tab="depth">DEPTH</button>
+        <button class="tab" data-tab="dsm">DSM</button>
+        <button class="tab" data-tab="error">ERROR MAP</button>
+        <button class="tab" data-tab="3d">3D VIEW</button>
+      </div>
+
+      <div class="main-view" id="mainView">
+        <div class="view-label" id="viewLabel">RGB IMAGE</div>
+        <div class="view-controls">
+          <div class="vc-btn" title="Zoom In"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+          <div class="vc-btn" title="Zoom Out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></div>
+          <div class="vc-btn" title="Reset View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+          <div class="vc-btn" title="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></div>
+        </div>
+        <div class="cursor-hud" id="cursorHud">
+          <span><strong id="hudCoord">X: — | Y: —</strong></span>
+          <span>Elev: <strong id="hudElev">—</strong></span>
+          <span>Slope: <strong id="hudSlope">—</strong></span>
+          <span>Conf: <strong id="hudConf">—</strong></span>
+        </div>
+        <canvas id="mainCanvas"></canvas>
+      </div>
+
+      <div class="sub-panels">
+        <div class="sub-panel">
+          <div class="sp-head"><span>Relative Depth</span></div>
+          <div class="sp-body"><canvas id="depthCanvas"></canvas><div class="legend"></div><div class="legend-tag top">Near</div><div class="legend-tag bottom">Far</div></div>
+        </div>
+        <div class="sub-panel">
+          <div class="sp-head"><span>DSM (Metric)</span></div>
+          <div class="sp-body"><canvas id="dsmCanvas"></canvas><div class="legend"></div><div class="legend-tag top">High<br>35 m</div><div class="legend-tag bottom">Low<br>0 m</div></div>
+        </div>
+        <div class="sub-panel">
+          <div class="sp-head"><span>Error Map (vs Reference)</span></div>
+          <div class="sp-body"><canvas id="errCanvas"></canvas><div class="legend"></div><div class="legend-tag top">High<br>20 m</div><div class="legend-tag bottom">Low<br>0 m</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19h16M8 19V9m4 10V5m4 14v-7"/></svg>ANALYSIS</div>
+        <div class="stat2x2">
+          <div class="stat-box"><div class="slabel2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l6-16 4 10 3-6 3 12"/></svg>Height Range</div><div class="sval" id="statHeight">—</div></div>
+          <div class="stat-box"><div class="slabel2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M3 20L15 6l6 14"/></svg>Slope Range</div><div class="sval" id="statSlope">—</div></div>
+          <div class="stat-box"><div class="slabel2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 4v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V7z"/></svg>Confidence</div><div class="sval" id="statConf">—</div></div>
+          <div class="stat-box"><div class="slabel2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="16" height="12"/><path d="M9 21v-5h6v5M9 9V4h6v5"/></svg>Mode</div><div class="sval" id="statBuilding" style="font-size:15px;">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V9m8 12V3m8 18v-7"/></svg>CALIBRATION SOURCES</div>
+        <div class="calib-row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg><span class="cname">Monocular Depth</span><span class="cweight">—</span></div>
+        <div class="calib-row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-9 4 6 3-5 6 8"/></svg><span class="cname">Spatial Reference</span><span class="cweight">—</span></div>
+        <div class="calib-row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6"/></svg><span class="cname">Shadow Constraint</span><span class="cweight">—</span></div>
+        <div class="calib-row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="4" height="10"/><rect x="10" y="6" width="4" height="14"/><rect x="16" y="3" width="4" height="17"/></svg><span class="cname">Calibration Method</span><span class="cweight">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h6"/></svg>OUTPUT INFO</div>
+        <div class="datasource-row">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          Mode
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div class="datasource-row">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>
+          Depth Model
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div class="datasource-row">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-9 4 6 3-5 6 8"/></svg>
+          CRS / Transform
+          <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="12" width="4" height="8"/><rect x="10" y="8" width="4" height="12"/><rect x="17" y="4" width="4" height="16"/></svg>CALIBRATION RESULT</div>
+        <div class="cmp-row"><div class="cmp-top"><span class="cmpname">Linear (OLS)</span><span class="cmpval">—</span></div><div class="cmp-bar-track"><div class="cmp-bar-fill" style="width:100%"></div></div></div>
+        <div class="cmp-row"><div class="cmp-top"><span class="cmpname">Non-linear</span><span class="cmpval">—</span></div><div class="cmp-bar-track"><div class="cmp-bar-fill" style="width:80%"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="card" style="margin-top:0;">
+      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>VALIDATION (vs Reference DSM)</div>
+      <div class="val-grid">
+        <div class="val-box"><div class="vlabel">MAE</div><div class="vval" id="valMAE">—</div></div>
+        <div class="val-box"><div class="vlabel">RMSE</div><div class="vval" id="valRMSE">—</div></div>
+        <div class="val-box"><div class="vlabel">R&#178; (Correlation)</div><div class="vval" id="valR2">—</div></div>
+        <div class="val-box"><div class="vlabel">Bias</div><div class="vval" id="valBias">—</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:0;">
+      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-8 4 5 4-9 5 12"/></svg>ELEVATION PROFILE (Sample Line)</div>
+      <div class="elev-legend">
+        <span><span class="swatch"></span>Predicted DSM</span>
+        <span><span class="swatch dashed"></span>Reference DSM</span>
+      </div>
+      <canvas id="elevChart" style="width:100%;height:160px;"></canvas>
+    </div>
+
+    <div class="card" style="margin-top:0;">
+      <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>3D CONTROLS (in 3D View)</div>
+      <div class="controls-grid">
+        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/></svg><span class="cl">Orbit</span></div>
+        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12l20-8-8 20-3-9-9-3z"/></svg><span class="cl">Fly</span></div>
+        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg><span class="cl">Zoom</span></div>
+        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v6m0 0l3-3m-3 3L9 5"/><circle cx="12" cy="15" r="6"/></svg><span class="cl">Reset North</span></div>
+        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg><span class="cl">Screenshot</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<script>
+(function(){
+  let selectedFile = null;
+  let lastResult = null;
+  const API_BASE = '';
+
+  // Three.js State
+  let threeRenderer = null, threeScene = null, threeCamera = null, threeControls = null;
+  let terrainMesh = null;
+  let isFlying = false;
+  let flyAngle = 0;
+  let animFrameId = null;
+  let webglCanvas = null;
+
+  function fitCanvas(canvas){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(rect.width*dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height*dpr));
+    return canvas.getContext('2d');
+  }
+
+  function drawBase64ToCanvas(canvas, b64url){
+    return new Promise(resolve => {
+      if(!b64url){ resolve(); return; }
+      const img = new Image();
+      img.onload = function(){
+        const ctx = fitCanvas(canvas);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve();
+      };
+      img.onerror = function(){ resolve(); };
+      img.src = b64url;
+    });
+  }
+
+  function formatBytes(bytes){
+    if(bytes < 1024) return bytes + ' B';
+    if(bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(1) + ' MB';
+  }
+
+  function extLabel(name){
+    const ext = (name||'').split('.').pop().toLowerCase();
+    if(ext==='tif'||ext==='tiff') return 'GeoTIFF';
+    if(ext==='png') return 'PNG';
+    if(ext==='jpg'||ext==='jpeg') return 'JPEG';
+    return ext.toUpperCase();
+  }
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileCard = document.getElementById('fileCard');
+  const processBtn = document.getElementById('processBtn');
+  const statusText = document.getElementById('statusText');
+  const mainCanvas = document.getElementById('mainCanvas');
+  const mainView = document.getElementById('mainView');
+
+  // Hero CTA smooth scroll
+  const heroCta = document.querySelector('.hero-cta');
+  if(heroCta){
+    heroCta.addEventListener('click', function(){
+      document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  dropzone.addEventListener('click', function(){ fileInput.click(); });
+  ['dragover'].forEach(function(evt){
+    dropzone.addEventListener(evt, function(e){ e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    dropzone.addEventListener(evt, function(e){ e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  dropzone.addEventListener('drop', function(e){
+    if(e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', function(e){
+    if(e.target.files.length) loadFile(e.target.files[0]);
+  });
+
+  document.getElementById('removeFile').addEventListener('click', function(e){
+    e.stopPropagation();
+    fileCard.style.display = 'none';
+    selectedFile = null;
+    processBtn.disabled = true;
+  });
+
+  function loadFile(file){
+    selectedFile = file;
+    document.getElementById('fnameText').textContent = file.name;
+    document.getElementById('fsize').textContent = formatBytes(file.size);
+    const label = extLabel(file.name);
+    document.getElementById('ftype').textContent = label;
+    fileCard.style.display = 'block';
+    processBtn.disabled = false;
+    document.getElementById('fcrs').textContent = 'Pending analysis...';
+    document.getElementById('fres').textContent = '—';
+    document.getElementById('fdims').textContent = '—';
+
+    if(label === 'GeoTIFF'){
+      document.getElementById('modeGeoOpt').classList.add('active');
+      document.getElementById('modeRelOpt').classList.remove('active');
+    } else {
+      document.getElementById('modeRelOpt').classList.add('active');
+      document.getElementById('modeGeoOpt').classList.remove('active');
+    }
+  }
+
+  document.getElementById('modeGeoOpt').addEventListener('click', function(){
+    this.classList.add('active');
+    document.getElementById('modeRelOpt').classList.remove('active');
+  });
+  document.getElementById('modeRelOpt').addEventListener('click', function(){
+    this.classList.add('active');
+    document.getElementById('modeGeoOpt').classList.remove('active');
+  });
+
+  var steps = document.querySelectorAll('.step');
+  var stepLines = document.querySelectorAll('.step-line');
+  function setStep(activeIdx, doneUpTo){
+    steps.forEach(function(s,i){
+      s.classList.remove('active','done');
+      if(i < doneUpTo) s.classList.add('done');
+      else if(i === activeIdx) s.classList.add('active');
+    });
+    stepLines.forEach(function(l,i){ l.classList.toggle('done', i < doneUpTo); });
+  }
+
+  processBtn.addEventListener('click', function(){
+    if(!selectedFile || processBtn.disabled) return;
+    processImage();
+  });
+
+  function populateFileCardFromResponse(r){
+    document.getElementById('fcrs').textContent = r.crs || 'Non-georeferenced';
+    document.getElementById('fres').textContent = r.gsd_x ? (r.gsd_x + ' m/px') : '—';
+    document.getElementById('fdims').textContent = r.width + ' \u00d7 ' + r.height;
+  }
+
+  function updateAnalysisStats(r){
+    var hMin = r.height_min, hMax = r.height_max;
+    document.getElementById('statHeight').textContent = (hMin !== undefined && hMax !== undefined) ? (hMin.toFixed(1) + ' \u2013 ' + hMax.toFixed(1) + ' ' + r.height_unit) : '—';
+    document.getElementById('statSlope').textContent = (r.slope_min !== undefined && r.slope_max !== undefined) ? (r.slope_min.toFixed(1) + '\u00b0 \u2013 ' + r.slope_max.toFixed(1) + '\u00b0') : '—';
+    document.getElementById('statConf').textContent = r.confidence_mean !== undefined ? ((r.confidence_mean * 100).toFixed(0) + '%') : '—';
+    document.getElementById('statBuilding').textContent = r.mode === 'absolute' ? 'Metric DSM' : 'Relative DSM';
+  }
+
+  function updateCalibrationSources(r){
+    var cal = (r.metadata && r.metadata.calibration) || {};
+    var rows = document.querySelectorAll('.calib-row');
+    if(rows[0]){
+      rows[0].querySelector('.cname').textContent = 'Monocular Depth (DAV2)';
+      rows[0].querySelector('.cweight').textContent = 'Method: ' + (cal.method || 'none');
+    }
+    if(rows[1]){
+      rows[1].querySelector('.cname').textContent = r.crs ? 'Geospatial Reference' : 'No CRS';
+      rows[1].querySelector('.cweight').textContent = r.gsd_x ? ('GSD: ' + r.gsd_x + ' m') : '—';
+    }
+    if(rows[2]){
+      rows[2].querySelector('.cname').textContent = 'Shadow Constraint';
+      rows[2].querySelector('.cweight').textContent = (r.metadata && r.metadata.shadow_mode) || 'disabled';
+    }
+    if(rows[3]){
+      rows[3].querySelector('.cname').textContent = 'Calibration Method';
+      rows[3].querySelector('.cweight').textContent = (cal.method === 'gcp' ? 'User GCPs' : (cal.method === 'dem' ? 'DEM / SRTM' : 'Relative'));
+    }
+
+    // Data sources checkmarks
+    const dsShadow = document.getElementById('dsShadow');
+    if(dsShadow){
+      if(r.metadata && r.metadata.shadow_mode && r.metadata.shadow_mode !== 'disabled') dsShadow.classList.remove('pending');
+      else dsShadow.classList.add('pending');
+    }
+    const dsDEM = document.getElementById('dsDEM');
+    if(dsDEM){
+      if(cal.method === 'dem') dsDEM.classList.remove('pending');
+      else dsDEM.classList.add('pending');
+    }
+  }
+
+  function updateMethodComparison(r){
+    var card = document.querySelector('.col-right');
+    var cal = (r.metadata && r.metadata.calibration) || {};
+    var cmpDiv = card.querySelector('.card:last-child');
+    if(!cmpDiv) return;
+    var rows = cmpDiv.querySelectorAll('.cmp-row');
+    if(rows[0]){
+      rows[0].querySelector('.cmpname').textContent = 'Linear (OLS)';
+      rows[0].querySelector('.cmpval').textContent = cal.gcp_mae ? (cal.gcp_mae.toFixed(2) + ' m MAE') : (cal.scale_a ? ('a=' + cal.scale_a.toFixed(2)) : 'baseline');
+    }
+    if(rows[1]){
+      rows[1].querySelector('.cmpname').textContent = cal.method === 'dem' ? 'DEM Datum Fit' : 'Prior / RMSE';
+      rows[1].querySelector('.cmpval').textContent = cal.gcp_rmse ? (cal.gcp_rmse.toFixed(2) + ' m RMSE') : (cal.terrain_anchor_elevation ? (cal.terrain_anchor_elevation.toFixed(1) + ' m datum') : '—');
+    }
+  }
+
+  function updateValidation(r){
+    var v = r.validation;
+    if(!v){
+      document.getElementById('valMAE').textContent = '—';
+      document.getElementById('valRMSE').textContent = '—';
+      document.getElementById('valR2').textContent = '—';
+      document.getElementById('valBias').textContent = '—';
+      return;
+    }
+    document.getElementById('valMAE').textContent = v.mae.toFixed(2) + ' m';
+    document.getElementById('valRMSE').textContent = v.rmse.toFixed(2) + ' m';
+    document.getElementById('valR2').textContent = v.r2.toFixed(2);
+    document.getElementById('valBias').textContent = (v.bias >= 0 ? '+' : '') + v.bias.toFixed(2) + ' m';
+  }
+
+  function drawElevChart(profile){
+    var canvas = document.getElementById('elevChart');
+    if(!canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    var W = rect.width, H = rect.height;
+    var padL = 34, padB = 20, padT = 10, padR = 8;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+
+    ctx.clearRect(0, 0, W, H);
+
+    var vals = profile || [];
+    if(!vals.length) return;
+    var mn = Math.min.apply(null, vals);
+    var mx = Math.max.apply(null, vals);
+    var span = (mx - mn) || 1;
+
+    ctx.strokeStyle = '#232326';
+    ctx.lineWidth = 1;
+    ctx.font = '10px IBM Plex Mono, monospace';
+    ctx.fillStyle = '#5c5c60';
+    for(var g = 0; g <= 4; g++){
+      var v = mn + (span * g / 4);
+      var y = padT + plotH - (g / 4) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      ctx.fillText(v.toFixed(1) + (lastResult && lastResult.height_unit ? lastResult.height_unit : 'm'), 2, y + 3);
+    }
+
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#f2f2f0';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for(var i = 0; i < vals.length; i++){
+      var x = padL + (i / (vals.length - 1)) * plotW;
+      var y = padT + plotH - ((vals[i] - mn) / span) * plotH;
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  function updateExportBtn(r){
+    var btn = document.querySelector('.btn-export');
+    if(btn && r.export_url){
+      btn.onclick = function(){ window.open(API_BASE + r.export_url, '_blank'); };
+      btn.style.opacity = '1';
+    }
+  }
+
+  var currentTab = 'overview';
+  var currentImages = {};
+
+  var tabLabels = {overview:'RGB IMAGE', depth:'RELATIVE DEPTH', dsm:'DSM (METRIC)', error:'ERROR MAP', '3d':'3D VIEW'};
+
+  document.querySelectorAll('.tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+      btn.classList.add('active');
+      currentTab = btn.dataset.tab;
+      document.getElementById('viewLabel').textContent = tabLabels[currentTab] || 'RGB IMAGE';
+      renderActiveTab();
+    });
+  });
+
+  // Sub-panel click to switch tabs
+  document.getElementById('depthCanvas').parentElement.parentElement.addEventListener('click', function(){
+    document.querySelector('.tab[data-tab="depth"]').click();
+  });
+  document.getElementById('dsmCanvas').parentElement.parentElement.addEventListener('click', function(){
+    document.querySelector('.tab[data-tab="dsm"]').click();
+  });
+  document.getElementById('errCanvas').parentElement.parentElement.addEventListener('click', function(){
+    document.querySelector('.tab[data-tab="error"]').click();
+  });
+  function updateCursorHud(u, v){
+    if(!lastResult) return;
+    var w = lastResult.visual_width || 256;
+    var h = lastResult.visual_height || 256;
+    var x = Math.min(w - 1, Math.max(0, Math.floor(u * w)));
+    var y = Math.min(h - 1, Math.max(0, Math.floor(v * h)));
+    var idx = y * w + x;
+
+    var elev = (lastResult.height_map && lastResult.height_map[idx] !== undefined) ? lastResult.height_map[idx] : null;
+    var slope = (lastResult.slope_map && lastResult.slope_map[idx] !== undefined) ? lastResult.slope_map[idx] : null;
+    var conf = (lastResult.confidence_map && lastResult.confidence_map[idx] !== undefined) ? lastResult.confidence_map[idx] : null;
+    var unit = lastResult.height_unit || 'm';
+
+    var origW = lastResult.width || w;
+    var origH = lastResult.height || h;
+    var origX = Math.min(origW - 1, Math.max(0, Math.floor(u * origW)));
+    var origY = Math.min(origH - 1, Math.max(0, Math.floor(v * origH)));
+
+    document.getElementById('hudCoord').textContent = 'X: ' + origX + ' | Y: ' + origY;
+    document.getElementById('hudElev').textContent = (elev !== null) ? elev.toFixed(1) + ' ' + unit : '—';
+    document.getElementById('hudSlope').textContent = (slope !== null) ? slope.toFixed(1) + '°' : '—';
+    document.getElementById('hudConf').textContent = (conf !== null) ? Math.round(conf * 100) + '%' : '—';
+  }
+
+  // 2D Canvas Cursor Mapping
+  mainCanvas.addEventListener('mousemove', function(e){
+    var rect = mainCanvas.getBoundingClientRect();
+    var u = (e.clientX - rect.left) / rect.width;
+    var v = (e.clientY - rect.top) / rect.height;
+    if(u >= 0 && u <= 1 && v >= 0 && v <= 1){
+      updateCursorHud(u, v);
+    }
+  });
+
+  // =========================================================================
+  // THREE.JS 3D WEBGL TERRAIN ENGINE
+  // =========================================================================
+  var raycaster = null;
+  var mouseVec = null;
+
+  function initThreeJS(){
+    if(threeRenderer) return;
+    if(typeof THREE === 'undefined') return;
+
+    webglCanvas = document.createElement('canvas');
+    webglCanvas.id = 'webglCanvas';
+    webglCanvas.style.position = 'absolute';
+    webglCanvas.style.top = '0';
+    webglCanvas.style.left = '0';
+    webglCanvas.style.width = '100%';
+    webglCanvas.style.height = '100%';
+    webglCanvas.style.display = 'none';
+    webglCanvas.style.zIndex = '5';
+    mainView.appendChild(webglCanvas);
+
+    threeScene = new THREE.Scene();
+    threeScene.background = new THREE.Color(0x08080a);
+
+    const rect = mainView.getBoundingClientRect();
+    threeCamera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 1000);
+    threeCamera.position.set(0, 20, 24);
+
+    threeRenderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true, preserveDrawingBuffer: true });
+    threeRenderer.setSize(rect.width, rect.height);
+    threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    threeRenderer.shadowMap.enabled = true;
+
+    if(typeof THREE.OrbitControls === 'function'){
+      threeControls = new THREE.OrbitControls(threeCamera, webglCanvas);
+      threeControls.enableDamping = true;
+      threeControls.dampingFactor = 0.05;
+      threeControls.maxPolarAngle = Math.PI / 2 - 0.02;
+    }
+
+    raycaster = new THREE.Raycaster();
+    mouseVec = new THREE.Vector2();
+
+    webglCanvas.addEventListener('mousemove', function(e){
+      if(!lastResult || !terrainMesh || !threeCamera || !raycaster) return;
+      var r = webglCanvas.getBoundingClientRect();
+      mouseVec.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      mouseVec.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+      raycaster.setFromCamera(mouseVec, threeCamera);
+      var hits = raycaster.intersectObject(terrainMesh);
+      if(hits.length > 0 && hits[0].uv){
+        var u = hits[0].uv.x;
+        var v = 1.0 - hits[0].uv.y;
+        updateCursorHud(u, v);
+      }
+    });
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    threeScene.add(ambient);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(15, 30, 20);
+    threeScene.add(dirLight);
+
+    const grid = new THREE.GridHelper(30, 30, 0x333339, 0x18181c);
+    grid.position.y = -0.05;
+    threeScene.add(grid);
+
+    function animate(){
+      animFrameId = requestAnimationFrame(animate);
+      if(isFlying && threeControls){
+        flyAngle += 0.008;
+        const radius = 26;
+        threeCamera.position.x = radius * Math.sin(flyAngle);
+        threeCamera.position.z = radius * Math.cos(flyAngle);
+        threeCamera.position.y = 16 + 4 * Math.sin(flyAngle * 0.5);
+        threeCamera.lookAt(0, 0, 0);
+      } else if(threeControls){
+        threeControls.update();
+      }
+      threeRenderer.render(threeScene, threeCamera);
+    }
+    animate();
+
+    window.addEventListener('resize', function(){
+      if(threeRenderer && webglCanvas){
+        const r = mainView.getBoundingClientRect();
+        threeCamera.aspect = r.width / r.height;
+        threeCamera.updateProjectionMatrix();
+        threeRenderer.setSize(r.width, r.height);
+      }
+    });
+  }
+
+  function build3DMesh(r){
+    if(!threeScene || !r || !r.height_map) return;
+
+    if(terrainMesh){
+      threeScene.remove(terrainMesh);
+      terrainMesh.geometry.dispose();
+      if(terrainMesh.material.map) terrainMesh.material.map.dispose();
+      terrainMesh.material.dispose();
+      terrainMesh = null;
+    }
+
+    const size = r.visual_width || 256;
+    const heights = r.height_map;
+    const geometry = new THREE.PlaneGeometry(20, 20, size - 1, size - 1);
+    geometry.rotateX(-Math.PI / 2);
+
+    const pos = geometry.attributes.position;
+    let minH = Infinity, maxH = -Infinity;
+    for(let i = 0; i < heights.length; i++){
+      const v = heights[i];
+      if(v < minH) minH = v;
+      if(v > maxH) maxH = v;
+    }
+    const span = (maxH - minH) || 1.0;
+    const scaleY = r.mode === 'absolute' ? (4.0 / span) : 3.5;
+
+    for(let i = 0; i < pos.count && i < heights.length; i++){
+      const normH = (heights[i] - minH) / span;
+      pos.setY(i, normH * scaleY);
+    }
+    geometry.computeVertexNormals();
+
+    const texLoader = new THREE.TextureLoader();
+    const texture = texLoader.load(r.rgb || r.dsm_preview, function(){
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      if(threeRenderer) threeRenderer.render(threeScene, threeCamera);
+    });
+
+    const material = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.7,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+
+    terrainMesh = new THREE.Mesh(geometry, material);
+    threeScene.add(terrainMesh);
+  }
+
+  // 3D Controls buttons
+  const ctrlBoxes = document.querySelectorAll('.ctrl-box');
+  if(ctrlBoxes.length >= 5){
+    // 0: Orbit
+    ctrlBoxes[0].addEventListener('click', function(){
+      isFlying = false;
+      document.querySelector('.tab[data-tab="3d"]').click();
+    });
+    // 1: Fly
+    ctrlBoxes[1].addEventListener('click', function(){
+      document.querySelector('.tab[data-tab="3d"]').click();
+      isFlying = !isFlying;
+      ctrlBoxes[1].style.borderColor = isFlying ? '#f4f3ef' : 'var(--line)';
+    });
+    // 2: Zoom
+    ctrlBoxes[2].addEventListener('click', function(){
+      if(threeCamera){
+        threeCamera.position.multiplyScalar(0.85);
+        if(threeControls) threeControls.update();
+      }
+    });
+    // 3: Reset North
+    ctrlBoxes[3].addEventListener('click', function(){
+      isFlying = false;
+      if(threeCamera && threeControls){
+        threeCamera.position.set(0, 20, 24);
+        threeControls.target.set(0, 0, 0);
+        threeControls.update();
+      }
+    });
+    // 4: Screenshot
+    ctrlBoxes[4].addEventListener('click', function(){
+      const activeC = (currentTab === '3d' && webglCanvas) ? webglCanvas : mainCanvas;
+      const link = document.createElement('a');
+      link.download = 'depthwizard_snapshot.png';
+      link.href = activeC.toDataURL('image/png');
+      link.click();
+    });
+  }
+
+  // Viewport Zoom / Pan / Fullscreen Controls
+  const vcBtns = document.querySelectorAll('.vc-btn');
+  if(vcBtns.length >= 4){
+    // Zoom In
+    vcBtns[0].addEventListener('click', function(){
+      if(currentTab === '3d' && threeCamera){
+        threeCamera.position.multiplyScalar(0.85);
+      }
+    });
+    // Zoom Out
+    vcBtns[1].addEventListener('click', function(){
+      if(currentTab === '3d' && threeCamera){
+        threeCamera.position.multiplyScalar(1.15);
+      }
+    });
+    // Reset View
+    vcBtns[2].addEventListener('click', function(){
+      if(currentTab === '3d' && threeCamera && threeControls){
+        threeCamera.position.set(0, 20, 24);
+        threeControls.target.set(0, 0, 0);
+        threeControls.update();
+      }
+    });
+    // Fullscreen
+    vcBtns[3].addEventListener('click', function(){
+      if(!document.fullscreenElement){
+        mainView.requestFullscreen().catch(()=>{});
+      } else {
+        document.exitFullscreen().catch(()=>{});
+      }
+    });
+  }
+
+  async function renderActiveTab(){
+    initThreeJS();
+
+    if(currentTab === '3d'){
+      mainCanvas.style.display = 'none';
+      if(webglCanvas){
+        webglCanvas.style.display = 'block';
+        const r = mainView.getBoundingClientRect();
+        if(threeRenderer && threeCamera){
+          threeCamera.aspect = r.width / r.height;
+          threeCamera.updateProjectionMatrix();
+          threeRenderer.setSize(r.width, r.height);
+        }
+      }
+      if(lastResult && !terrainMesh) build3DMesh(lastResult);
+      return;
+    }
+
+    if(webglCanvas) webglCanvas.style.display = 'none';
+    mainCanvas.style.display = 'block';
+
+    if(currentTab === 'overview' && currentImages.rgb){
+      await drawBase64ToCanvas(mainCanvas, currentImages.rgb);
+    } else if(currentTab === 'depth' && currentImages.depth){
+      await drawBase64ToCanvas(mainCanvas, currentImages.depth);
+    } else if(currentTab === 'dsm' && currentImages.dsm){
+      await drawBase64ToCanvas(mainCanvas, currentImages.dsm);
+    } else if(currentTab === 'error' && currentImages.error){
+      await drawBase64ToCanvas(mainCanvas, currentImages.error);
+    } else {
+      var ctx = fitCanvas(mainCanvas);
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
+      ctx.fillStyle = '#555';
+      ctx.font = '14px monospace';
+      ctx.fillText('Awaiting processing...', 20, mainCanvas.height / 2);
+    }
+  }
+
+  function renderSubPanels(r){
+    drawBase64ToCanvas(document.getElementById('depthCanvas'), r.depth_preview);
+    drawBase64ToCanvas(document.getElementById('dsmCanvas'), r.dsm_preview);
+
+    var dsmTags = document.getElementById('dsmCanvas').parentElement.querySelectorAll('.legend-tag');
+    if(dsmTags.length >= 2){
+      var unit = r.height_unit || 'm';
+      dsmTags[0].innerHTML = 'High<br>' + (r.height_max !== undefined ? r.height_max.toFixed(1) + ' ' + unit : '35 m');
+      dsmTags[1].innerHTML = 'Low<br>' + (r.height_min !== undefined ? r.height_min.toFixed(1) + ' ' + unit : '0 m');
+    }
+
+    var errTags = document.getElementById('errCanvas').parentElement.querySelectorAll('.legend-tag');
+    if(r.error_preview){
+      drawBase64ToCanvas(document.getElementById('errCanvas'), r.error_preview);
+      if(errTags.length >= 2){
+        var maxErr = (r.validation && r.validation.rmse) ? (r.validation.rmse * 2.5).toFixed(1) + ' m' : '15 m';
+        errTags[0].innerHTML = 'High<br>' + maxErr;
+        errTags[1].innerHTML = 'Low<br>0 m';
+      }
+    } else {
+      var c = document.getElementById('errCanvas');
+      var ctx = fitCanvas(c);
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = '#555';
+      ctx.font = '11px monospace';
+      ctx.fillText('No reference DEM', 10, c.height / 2);
+    }
+  }
+
+  function showPlaceholderCanvases(){
+    var canvases = ['mainCanvas', 'depthCanvas', 'dsmCanvas', 'errCanvas'];
+    canvases.forEach(function(id){
+      var c = document.getElementById(id);
+      var ctx = fitCanvas(c);
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = '#333';
+      ctx.font = '12px monospace';
+      ctx.fillText('Awaiting processing...', 20, c.height / 2);
+    });
+    var ec = document.getElementById('elevChart');
+    if(ec){
+      var rect = ec.getBoundingClientRect();
+      var dpr = window.devicePixelRatio || 1;
+      ec.width = rect.width * dpr;
+      ec.height = rect.height * dpr;
+      var ectx = ec.getContext('2d');
+      ectx.scale(dpr, dpr);
+      ectx.fillStyle = '#0a0a0a';
+      ectx.fillRect(0, 0, rect.width, rect.height);
+    }
+  }
+
+  async function processImage(){
+    if(!selectedFile) return;
+    processBtn.disabled = true;
+    statusText.textContent = 'Uploading...';
+    setStep(0, 0);
+
+    var formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('use_shadows', 'true');
+    formData.append('visual_size', '256');
+
+    var delay = 400;
+    var stepIdx = 0;
+    var iv = setInterval(function(){
+      stepIdx++;
+      if(stepIdx <= 4){
+        setStep(stepIdx, stepIdx);
+        if(stepIdx === 1) statusText.textContent = 'Loading model...';
+        else if(stepIdx === 2) statusText.textContent = 'Estimating depth...';
+        else if(stepIdx === 3) statusText.textContent = 'Calibrating...';
+        else if(stepIdx === 4) statusText.textContent = 'Generating DSM...';
+      }
+    }, delay);
+
+    try {
+      var resp = await fetch(API_BASE + '/process', { method: 'POST', body: formData });
+      clearInterval(iv);
+
+      if(!resp.ok){
+        var errBody = await resp.json().catch(function(){ return {error: resp.statusText}; });
+        throw new Error(errBody.error || errBody.message || 'Processing failed');
+      }
+
+      var r = await resp.json();
+      lastResult = r;
+
+      setStep(4, 5);
+      statusText.textContent = 'Complete (' + r.mode + ')';
+
+      currentImages = {
+        rgb: r.rgb,
+        depth: r.depth_preview,
+        dsm: r.dsm_preview,
+        error: r.error_preview,
+        slope: r.slope_preview,
+        confidence: r.confidence_preview
+      };
+
+      populateFileCardFromResponse(r);
+      updateAnalysisStats(r);
+      updateCalibrationSources(r);
+      updateMethodComparison(r);
+      updateValidation(r);
+      updateExportBtn(r);
+
+      build3DMesh(r);
+
+      // Default to 3D Terrain Model as the immediate first output
+      currentTab = '3d';
+      document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+      var tab3d = document.querySelector('.tab[data-tab="3d"]');
+      if(tab3d) tab3d.classList.add('active');
+      document.getElementById('viewLabel').textContent = '3D TERRAIN';
+
+      await renderActiveTab();
+      renderSubPanels(r);
+      drawElevChart(r.elevation_profile);
+
+      processBtn.disabled = false;
+
+    } catch(err){
+      clearInterval(iv);
+      setStep(0, 0);
+      statusText.textContent = 'Error: ' + err.message;
+      processBtn.disabled = false;
+      console.error('Process error:', err);
+      alert('Processing failed: ' + err.message);
+    }
+  }
+
+  showPlaceholderCanvases();
+  setStep(4, 5);
+})();
+</script></body></html>
