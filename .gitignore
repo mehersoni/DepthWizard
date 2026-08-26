@@ -1,0 +1,22 @@
+# Virtual Environments
+openEnv/
+venv/
+.venv/
+env/
+
+# Python Bytecode & Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Local Generated Diagnostic Output
+output/
+
+# Temporary Local Root Scripts
+print_step*.py
+
+# IDE & OS Specific Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
