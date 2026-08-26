@@ -1,3 +1,15 @@
+---
+title: DepthWizard
+emoji: 🏔️
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.20.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # DepthWizard — 3D Surface Reconstruction & Elevation Extraction from Monocular Remote Sensing
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
