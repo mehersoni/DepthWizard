@@ -334,11 +334,13 @@ async def process_image_endpoint(
             pass
 
 
-# Mount Gradio app into FastAPI
-app = gr.mount_gradio_app(app, demo, path="/")
+# Mount FastAPI /process and /export routes into Gradio's internal FastAPI app
+demo.app.include_router(app.router)
 
 if __name__ == "__main__":
     get_model()
-    port = int(os.environ.get("PORT", 7860))
-    print(f"[DepthWizard] Launching unified FastAPI + Gradio server on 0.0.0.0:{port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        ssr_mode=False
+    )
