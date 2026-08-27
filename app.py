@@ -140,4 +140,4 @@ with gr.Blocks(title="DepthWizard — 3D Elevation from Single Image") as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, ssr_mode=False)
+    demo.queue().launch(server_name="0.0.0.0", server_port=7860, ssr_mode=False)
