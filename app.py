@@ -115,7 +115,7 @@ with gr.Blocks(title="DepthWizard — 3D Elevation from Single Image") as demo:
 
     with gr.Row():
         with gr.Column():
-            input_img = gr.Image(label="Input Optical Image (Aerial / Drone / Satellite)")
+            input_img = gr.Image(label="Input Optical Image (Aerial / Drone / Satellite)", type="pil")
             gcp_box = gr.Textbox(
                 label="Ground Control Points (Optional JSON)",
                 placeholder='[{"x": 256, "y": 256, "elevation": 48.5}]',
@@ -129,8 +129,8 @@ with gr.Blocks(title="DepthWizard — 3D Elevation from Single Image") as demo:
             dsm_download = gr.File(label="📥 Download 32-bit Float GeoTIFF DSM")
 
     with gr.Row():
-        depth_out = gr.Image(label="Calibrated Elevation Colormap (Turbo)")
-        slope_out = gr.Image(label="Surface Slope Angle (Magma)")
+        depth_out = gr.Image(label="Calibrated Elevation Colormap (Turbo)", type="numpy")
+        slope_out = gr.Image(label="Surface Slope Angle (Magma)", type="numpy")
 
     run_btn.click(
         fn=run_depthwizard,
