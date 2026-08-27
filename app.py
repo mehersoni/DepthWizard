@@ -28,13 +28,21 @@ if not hasattr(huggingface_hub, "HfFolder"):
     huggingface_hub.HfFolder = HfFolder
 
 import gradio as gr
-
 from process_image import process_image, export_dsm
 from depth.depth_model import load_model
 
-print("[Space Init] Preloading Depth Anything V2 model...", flush=True)
-MODEL, PROCESSOR, DEVICE = load_model()
-print(f"[Space Init] Model ready on device: {DEVICE}", flush=True)
+# Global model cache for fast inference
+MODEL = None
+PROCESSOR = None
+DEVICE = None
+
+def get_loaded_model():
+    global MODEL, PROCESSOR, DEVICE
+    if MODEL is None:
+        print("[Space Init] Loading Depth Anything V2 model...", flush=True)
+        MODEL, PROCESSOR, DEVICE = load_model()
+        print(f"[Space Init] Model ready on device: {DEVICE}", flush=True)
+    return MODEL, PROCESSOR, DEVICE
 
 
 def run_depthwizard(image_input, gcp_text="", use_shadows=True):
@@ -43,6 +51,8 @@ def run_depthwizard(image_input, gcp_text="", use_shadows=True):
     """
     if image_input is None:
         return None, None, None, "Please upload an input image."
+
+    model, processor, device = get_loaded_model()
 
     # Save to temp file
     temp_path = "temp_input.png"
@@ -66,9 +76,9 @@ def run_depthwizard(image_input, gcp_text="", use_shadows=True):
         gcps=parsed_gcps,
         dem_path=None,
         use_shadows=use_shadows,
-        model=MODEL,
-        processor=PROCESSOR,
-        device=DEVICE
+        model=model,
+        processor=processor,
+        device=device
     )
 
     h_map = result["height_map"]
@@ -173,4 +183,4 @@ with gr.Blocks(title="DepthWizard — 3D Elevation from Single Image", css=custo
     )
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.queue().launch(server_name="0.0.0.0", server_port=7860)
