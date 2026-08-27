@@ -129,15 +129,17 @@ with open(html_dashboard_path, "r", encoding="utf-8") as f:
     custom_ui_html = f.read()
 
 custom_css = """
-body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: #08080a; }
-.gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; height: 100vh !important; background: #08080a; }
-iframe { width: 100vw; height: 100vh; border: none; }
+body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
+.gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; min-height: 100vh !important; background: #08080a; }
+#custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
 """
 
 with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
     gr.HTML(
         f"""
-        <iframe srcdoc="{custom_ui_html.replace('"', '&quot;')}" style="width: 100vw; height: 100vh; border: none; margin: 0; padding: 0;"></iframe>
+        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
+            <iframe srcdoc="{custom_ui_html.replace('"', '&quot;')}" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
+        </div>
         """
     )
 
