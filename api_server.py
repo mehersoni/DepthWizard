@@ -136,6 +136,18 @@ def encode_colormap_to_base64_jpeg(
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/demo", response_class=HTMLResponse)
+@app.get("/demo.html", response_class=HTMLResponse)
+def serve_demo():
+    """Serve the 3D demo dashboard."""
+    html_path = os.path.join(os.path.dirname(__file__), "demo.html")
+    if not os.path.isfile(html_path):
+        html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+@app.get("/landing", response_class=HTMLResponse)
 @app.get("/index.html", response_class=HTMLResponse)
 @app.get("/index", response_class=HTMLResponse)
 def serve_landing():
@@ -143,8 +155,6 @@ def serve_landing():
     html_path = os.path.join(os.path.dirname(__file__), "index.html")
     if not os.path.isfile(html_path):
         html_path = os.path.join(os.path.dirname(__file__), "demo.html")
-    if not os.path.isfile(html_path):
-        html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
 
