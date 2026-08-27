@@ -8,7 +8,6 @@ sdk_version: 5.15.0
 app_file: app.py
 pinned: false
 license: mit
-hardware: cpu-basic
 ---
 
 # DepthWizard — 3D Surface Reconstruction & Elevation Extraction from Monocular Remote Sensing

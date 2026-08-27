@@ -11,6 +11,7 @@ from PIL import Image
 import matplotlib.cm as cm
 
 import gradio as gr
+import spaces
 from process_image import process_image, export_dsm
 from depth.depth_model import load_model
 
@@ -28,6 +29,7 @@ def get_loaded_model():
     return MODEL, PROCESSOR, DEVICE
 
 
+@spaces.GPU
 def run_depthwizard(image_input, gcp_text="", use_shadows=True):
     """
     Execute DepthWizard pipeline and return 2D overlays, 3D surface mesh visualization, and DSM export.
