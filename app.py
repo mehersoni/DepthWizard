@@ -17,10 +17,16 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 import gradio as gr
+import spaces
 import uvicorn
 
 from process_image import process_image, export_dsm, export_slope
 from depth.depth_model import load_model
+
+@spaces.GPU
+def _gpu_worker_init():
+    """Satisfy Hugging Face ZeroGPU startup detector."""
+    return True
 
 # -----------------------------------------------------------------------------
 # Global State & Model Preload
