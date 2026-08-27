@@ -10,23 +10,6 @@ import base64
 import numpy as np
 from PIL import Image
 
-# -----------------------------------------------------------------------------
-# Hugging Face Hub / Gradio Compatibility Shim (HfFolder monkey-patch)
-# -----------------------------------------------------------------------------
-import huggingface_hub
-if not hasattr(huggingface_hub, "HfFolder"):
-    class HfFolder:
-        @staticmethod
-        def get_token():
-            return os.environ.get("HF_TOKEN") or getattr(huggingface_hub, "get_token", lambda: None)()
-        @staticmethod
-        def save_token(token):
-            pass
-        @staticmethod
-        def delete_token():
-            pass
-    huggingface_hub.HfFolder = HfFolder
-
 import gradio as gr
 from process_image import process_image, export_dsm
 from depth.depth_model import load_model
