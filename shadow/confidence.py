@@ -26,7 +26,7 @@ IMPORTANT DISCLAIMER:
 - Regions are NOT deleted or hard-filtered based on this score.
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import cv2 as cv
 import numpy as np
 
@@ -289,3 +289,115 @@ def rank_shadow_regions(
         item["confidence_rank"] = rank
 
     return ranked_regions
+
+
+def evaluate_building_shadow_confidence(
+    corridor_res: Dict[str, Any],
+    height_res: Dict[str, Any],
+    direction_res: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Step 6: Transparent Confidence Scoring & Explicit Rejection.
+
+    Scores candidate based on:
+    - building/shadow boundary contact
+    - corridor shadow density
+    - directional alignment confidence
+    - shadow length physical bounds
+    - building height physical bounds
+
+    Returns:
+    - confidence_score: float in [0, 1]
+    - status: "VALID", "LOW CONFIDENCE", or "REJECTED"
+    - rejection_reason: Explicit explanation string if rejected or low confidence.
+    """
+    dir_conf = float(direction_res.get("confidence", 0.8)) if direction_res else 0.8
+
+    # 1. Boundary contact check
+    if not corridor_res.get("has_boundary_contact", False):
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": "No building-shadow contact"
+        }
+
+    # 2. Shadow length lower bound check
+    l_m = corridor_res.get("shadow_length_m", 0.0)
+    if l_m < 0.5:
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": "Shadow length below physical minimum"
+        }
+
+    # 3. Shadow length upper bound check
+    if l_m > 80.0:
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": "Shadow length exceeds physical maximum"
+        }
+
+    # 4. Corridor shadow pixel density check
+    density = corridor_res.get("corridor_density", 0.0)
+    if density < 0.02 and corridor_res.get("supporting_pixel_count", 0) < 15:
+        return {
+            "confidence_score": 0.05,
+            "status": "REJECTED",
+            "rejection_reason": "Insufficient corridor density"
+        }
+
+    # 5. Directional alignment check
+    if dir_conf < 0.20:
+        return {
+            "confidence_score": dir_conf,
+            "status": "REJECTED",
+            "rejection_reason": "Shadow direction unreliable"
+        }
+
+    # 6. Height status check
+    h_status = height_res.get("status", "")
+    h_reason = height_res.get("reason", "")
+    h_m = height_res.get("height_m", None)
+
+    if h_status == "REJECTED":
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": h_reason if h_reason else "Physical height check failed"
+        }
+
+    if h_m is None or h_m < 1.0:
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": "Height below physical minimum"
+        }
+
+    if h_m > 60.0:
+        return {
+            "confidence_score": 0.0,
+            "status": "REJECTED",
+            "rejection_reason": "Height exceeds physical maximum"
+        }
+
+    # Calculate overall confidence score
+    pix_count = corridor_res.get("supporting_pixel_count", 0)
+    score_density = min(1.0, density * 5.0)
+    score_pixels = min(1.0, pix_count / 150.0)
+
+    confidence_score = float(min(1.0, max(0.0, 0.40 * score_density + 0.35 * dir_conf + 0.25 * score_pixels)))
+
+    if confidence_score >= 0.45:
+        status = "VALID"
+        reason = None
+    else:
+        status = "LOW CONFIDENCE"
+        reason = "Low shadow confidence score"
+
+    return {
+        "confidence_score": confidence_score,
+        "status": status,
+        "rejection_reason": reason
+    }
+

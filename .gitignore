@@ -9,11 +9,26 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Local Generated Diagnostic Output
-output/
+# Datasets & Heavy Rasters
+Dataset/
+demoImages/
 
-# Temporary Local Root Scripts
-print_step*.py
+# Local Generated Intermediate Diagnostic Images
+output/potsdam_validation/
+output/*.png
+!output/final_demo_*.png
+output/m4_dataset_100_diag_*.png
+output/potsdam_full_diag_*.png
+output/shadow_*.png
+output/step10_*.png
+
+# Temporary Scratch Logs & Execution Artifacts
+tmp/*.txt
+tmp/*.log
+tmp/run_git_inspection.py
+tmp/check_git_diff_details.py
+tmp/inventory_output.py
+tmp/scan_secrets.py
 
 # IDE & OS Specific Files
 .vscode/

@@ -176,6 +176,59 @@ def estimate_building_height(
     tan_theta = math.tan(math.radians(sun_elevation_deg))
     height_m = float(l_m * tan_theta)
 
+    # Physical Sanity Checks
+    if l_m < 0.5:
+        return {
+            "shadow_length_px": float(shadow_length_px),
+            "meters_per_pixel": float(meters_per_pixel),
+            "shadow_length_m": l_m,
+            "sun_elevation_deg": float(sun_elevation_deg),
+            "height_m": None,
+            "status": "REJECTED",
+            "reason": "Shadow length below physical minimum",
+            "pair_confidence": float(pair_confidence),
+            "height_confidence_status": "REJECTED"
+        }
+
+    if l_m > 80.0:
+        return {
+            "shadow_length_px": float(shadow_length_px),
+            "meters_per_pixel": float(meters_per_pixel),
+            "shadow_length_m": l_m,
+            "sun_elevation_deg": float(sun_elevation_deg),
+            "height_m": None,
+            "status": "REJECTED",
+            "reason": "Shadow length exceeds physical maximum",
+            "pair_confidence": float(pair_confidence),
+            "height_confidence_status": "REJECTED"
+        }
+
+    if height_m < 1.0:
+        return {
+            "shadow_length_px": float(shadow_length_px),
+            "meters_per_pixel": float(meters_per_pixel),
+            "shadow_length_m": l_m,
+            "sun_elevation_deg": float(sun_elevation_deg),
+            "height_m": None,
+            "status": "REJECTED",
+            "reason": "Height below physical minimum",
+            "pair_confidence": float(pair_confidence),
+            "height_confidence_status": "REJECTED"
+        }
+
+    if height_m > 60.0:
+        return {
+            "shadow_length_px": float(shadow_length_px),
+            "meters_per_pixel": float(meters_per_pixel),
+            "shadow_length_m": l_m,
+            "sun_elevation_deg": float(sun_elevation_deg),
+            "height_m": None,
+            "status": "REJECTED",
+            "reason": "Height exceeds physical maximum",
+            "pair_confidence": float(pair_confidence),
+            "height_confidence_status": "REJECTED"
+        }
+
     if is_test_mode:
         status_label = "[TEST ONLY]"
         conf_status = "[TEST HEIGHT]"

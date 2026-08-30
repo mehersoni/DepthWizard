@@ -404,7 +404,7 @@ def execute_step9_validation():
     # -------------------------------------------------------------------------
     # STEP 9.14 — FINAL PIPELINE REPORT (TEXT ARTIFACT)
     # -------------------------------------------------------------------------
-    out_txt_path = os.path.join(output_dir, "final_pipeline_report_sat2.txt")
+    out_txt_path = os.path.join(output_dir, "final_pipeline_report_sat2.md")
     with open(out_txt_path, "w", encoding="utf-8") as f:
         f.write("=" * 80 + "\n")
         f.write(" M4 SHADOW CUE MODULE — FINAL PIPELINE EXECUTION REPORT (sat2.png)\n")

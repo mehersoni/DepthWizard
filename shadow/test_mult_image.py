@@ -66,7 +66,7 @@ def run_step10_8_generalization_report():
     output_dir = os.path.join(root_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
 
-    report_path = os.path.join(output_dir, "step10_multi_image_generalization_report.txt")
+    report_path = os.path.join(output_dir, "step10_multi_image_generalization_report.md")
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("=" * 80 + "\n")
         f.write(" M4 SHADOW CUE MODULE — FINAL MULTI-IMAGE GENERALIZATION REPORT (STEP 10.8)\n")
