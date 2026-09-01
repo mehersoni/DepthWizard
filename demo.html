@@ -1238,9 +1238,18 @@
     }, delay);
 
     try {
-      var apiEndpoint = (window.location.origin && window.location.origin.startsWith('http')) 
-        ? window.location.origin + '/process' 
-        : '/process';
+      var baseOrigin = '';
+      try {
+        if(window.location && window.location.origin && window.location.origin.startsWith('http') && window.location.origin !== 'null'){
+          baseOrigin = window.location.origin;
+        } else if(window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin.startsWith('http') && window.parent.location.origin !== 'null'){
+          baseOrigin = window.parent.location.origin;
+        }
+      } catch(e_origin) {
+        baseOrigin = '';
+      }
+
+      var apiEndpoint = (baseOrigin ? baseOrigin : '') + '/process';
 
       var resp = await fetch(apiEndpoint, { method: 'POST', body: formData });
       clearInterval(iv);
