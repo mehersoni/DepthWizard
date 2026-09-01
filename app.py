@@ -147,30 +147,26 @@ custom_css = """
 body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
 .gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; min-height: 100vh !important; background: #08080a; }
 #custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
-"""
-
-
 # -----------------------------------------------------------------------------
-# FastAPI API Server with Integrated /process & /export routes
+# Gradio & FastAPI Route Definitions
 # -----------------------------------------------------------------------------
-app = FastAPI(title="DepthWizard Backend", version="2.1.0")
+with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
+    gr.HTML(
+        f"""
+        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
+            <iframe srcdoc="{custom_ui_html.replace('"', '&quot;')}" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
+        </div>
+        """
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-
-@app.get("/health")
+@demo.app.get("/health")
 def health_check():
     return {"status": "online", "service": "DepthWizard Engine"}
 
 
-@app.get("/demo.html", response_class=HTMLResponse)
-@app.get("/demo", response_class=HTMLResponse)
+@demo.app.get("/demo.html", response_class=HTMLResponse)
+@demo.app.get("/demo", response_class=HTMLResponse)
 def serve_demo():
     html_path = os.path.join(os.path.dirname(__file__), "demo.html")
     if not os.path.isfile(html_path):
@@ -179,8 +175,8 @@ def serve_demo():
         return HTMLResponse(content=f.read())
 
 
-@app.get("/index.html", response_class=HTMLResponse)
-@app.get("/landing", response_class=HTMLResponse)
+@demo.app.get("/index.html", response_class=HTMLResponse)
+@demo.app.get("/landing", response_class=HTMLResponse)
 def serve_landing():
     html_path = os.path.join(os.path.dirname(__file__), "index.html")
     if not os.path.isfile(html_path):
@@ -189,7 +185,7 @@ def serve_landing():
         return HTMLResponse(content=f.read())
 
 
-@app.get("/export/{session_id}")
+@demo.app.get("/export/{session_id}")
 def download_export(session_id: str):
     if session_id not in EXPORT_CACHE:
         raise HTTPException(status_code=404, detail="Export session not found.")
@@ -201,7 +197,7 @@ def download_export(session_id: str):
     return FileResponse(path=filepath, filename=filename, media_type="application/octet-stream")
 
 
-@app.post("/process")
+@demo.app.post("/process")
 async def process_image_endpoint(
     file: UploadFile = File(...),
     gcps: Optional[str] = Form(None),
@@ -371,30 +367,6 @@ async def process_image_endpoint(
         except Exception:
             pass
 
-
-with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
-    gr.HTML(
-        f"""
-        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
-            <iframe src="/demo.html" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
-        </div>
-        """
-    )
-
-
-# Mount all FastAPI routes into Gradio's internal FastAPI app
-demo.app.include_router(app.router)
-
-# Also ensure /demo.html and / serve the custom Three.js interface
-@demo.app.get("/", response_class=HTMLResponse)
-@demo.app.get("/demo.html", response_class=HTMLResponse)
-@demo.app.get("/demo", response_class=HTMLResponse)
-def serve_root_demo():
-    html_path = os.path.join(os.path.dirname(__file__), "demo.html")
-    if not os.path.isfile(html_path):
-        html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
-    with open(html_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
 
 if __name__ == "__main__":
     get_model()
