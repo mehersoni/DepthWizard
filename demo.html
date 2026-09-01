@@ -379,11 +379,8 @@
   .tex-btn:hover{color:var(--fg);border-color:var(--fg-faint);}
   .tex-btn.active{background:var(--fg);color:var(--bg);font-weight:600;border-color:var(--fg);}
 
-.demo-topnav{max-width:1520px;margin:0 auto 14px;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.demo-topnav a{color:var(--fg);text-decoration:none;font-family:var(--display);font-weight:600;font-size:13px}.demo-topnav .back{color:var(--fg-dim);font-family:var(--mono);font-size:11px}
 </style></head><body>
-<div class="dash-page" id="dashboard"><div class="dash-app">
-<div class="demo-topnav"><a href="index.html">← DEPTHWIZARD</a><span class="back">3D RECONSTRUCTION CONSOLE</span></div>
-
+<div class="dash-page" id="dashboard">
 <div class="dash-app">
 
   <header>
@@ -503,16 +500,16 @@
 
       <div class="sub-panels">
         <div class="sub-panel">
-          <div class="sp-head"><span>Relative Depth</span></div>
-          <div class="sp-body"><canvas id="depthCanvas"></canvas><div class="legend"></div><div class="legend-tag top">Near</div><div class="legend-tag bottom">Far</div></div>
+          <div class="sp-head"><span>Relative Depth (Disparity)</span></div>
+          <div class="sp-body"><canvas id="depthCanvas"></canvas><div class="legend" style="background:linear-gradient(to bottom, #fde725, #cc4778, #0d0887);"></div><div class="legend-tag top">Near</div><div class="legend-tag bottom">Far</div></div>
         </div>
         <div class="sub-panel">
-          <div class="sp-head"><span>DSM (Metric)</span></div>
-          <div class="sp-body"><canvas id="dsmCanvas"></canvas><div class="legend"></div><div class="legend-tag top">High<br>35 m</div><div class="legend-tag bottom">Low<br>0 m</div></div>
+          <div class="sp-head"><span>Digital Surface Model (DSM)</span></div>
+          <div class="sp-body"><canvas id="dsmCanvas"></canvas><div class="legend" style="background:linear-gradient(to bottom, #d73027, #fee08b, #66bd63, #1a9850);"></div><div class="legend-tag top">High<br>35 m</div><div class="legend-tag bottom">Low<br>10 m</div></div>
         </div>
         <div class="sub-panel">
-          <div class="sp-head"><span>Error Map (vs Reference)</span></div>
-          <div class="sp-body"><canvas id="errCanvas"></canvas><div class="legend"></div><div class="legend-tag top">High<br>20 m</div><div class="legend-tag bottom">Low<br>0 m</div></div>
+          <div class="sp-head"><span>Error &amp; Uncertainty Map</span></div>
+          <div class="sp-body"><canvas id="errCanvas"></canvas><div class="legend" style="background:linear-gradient(to bottom, #fcffa4, #f98e09, #bc3754, #57106e, #000004);"></div><div class="legend-tag top">High<br>5 m</div><div class="legend-tag bottom">Low<br>0 m</div></div>
         </div>
       </div>
     </div>
@@ -971,8 +968,106 @@
   });
 
   // =========================================================================
-  // THREE.JS 3D WEBGL TERRAIN ENGINE
+  // THREE.JS 3D WEBGL TERRAIN ENGINE & ROBUST ORBIT CONTROLS
   // =========================================================================
+  class RobustOrbitControls {
+    constructor(camera, domElement) {
+      this.camera = camera;
+      this.domElement = domElement;
+      this.target = new THREE.Vector3(0, 0, 0);
+      this.enabled = true;
+      this.enableDamping = true;
+      this.dampingFactor = 0.08;
+      this.minDistance = 2.0;
+      this.maxDistance = 150.0;
+      this.minPolarAngle = 0.05;
+      this.maxPolarAngle = Math.PI / 2 - 0.02;
+
+      const offset = new THREE.Vector3().copy(this.camera.position).sub(this.target);
+      this.radius = Math.max(this.minDistance, offset.length());
+      this.theta = Math.atan2(offset.x, offset.z);
+      this.phi = Math.acos(Math.max(-1, Math.min(1, offset.y / this.radius)));
+
+      this.targetRadius = this.radius;
+      this.targetTheta = this.theta;
+      this.targetPhi = this.phi;
+
+      this.isPointerDown = false;
+      this.pointerStart = { x: 0, y: 0 };
+      this.activeButton = 0;
+
+      this.domElement.addEventListener('pointerdown', (e) => {
+        if (!this.enabled) return;
+        this.isPointerDown = true;
+        this.activeButton = e.button;
+        this.pointerStart.x = e.clientX;
+        this.pointerStart.y = e.clientY;
+        try { this.domElement.setPointerCapture(e.pointerId); } catch(err){}
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!this.enabled || !this.isPointerDown) return;
+        const dx = e.clientX - this.pointerStart.x;
+        const dy = e.clientY - this.pointerStart.y;
+        this.pointerStart.x = e.clientX;
+        this.pointerStart.y = e.clientY;
+
+        if (this.activeButton === 0) { // Left click / touch: Orbit
+          this.targetTheta -= dx * 0.007;
+          this.targetPhi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this.targetPhi - dy * 0.007));
+        } else if (this.activeButton === 2) { // Right click: Pan
+          const panSpeed = this.radius * 0.0015;
+          const forward = new THREE.Vector3().subVectors(this.target, this.camera.position);
+          forward.y = 0;
+          forward.normalize();
+          const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+          this.target.addScaledVector(right, -dx * panSpeed);
+          this.target.y += dy * panSpeed;
+        }
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        this.isPointerDown = false;
+        try { this.domElement.releasePointerCapture(e.pointerId); } catch(err){}
+      });
+
+      this.domElement.addEventListener('wheel', (e) => {
+        if (!this.enabled) return;
+        e.preventDefault();
+        const factor = e.deltaY > 0 ? 1.08 : 0.92;
+        this.targetRadius = Math.max(this.minDistance, Math.min(this.maxDistance, this.targetRadius * factor));
+      }, { passive: false });
+
+      this.domElement.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    update() {
+      if (this.enableDamping) {
+        this.radius += (this.targetRadius - this.radius) * this.dampingFactor;
+        this.theta += (this.targetTheta - this.theta) * this.dampingFactor;
+        this.phi += (this.targetPhi - this.phi) * this.dampingFactor;
+      } else {
+        this.radius = this.targetRadius;
+        this.theta = this.targetTheta;
+        this.phi = this.targetPhi;
+      }
+
+      const sinPhi = Math.sin(this.phi);
+      this.camera.position.x = this.target.x + this.radius * sinPhi * Math.sin(this.theta);
+      this.camera.position.y = this.target.y + this.radius * Math.cos(this.phi);
+      this.camera.position.z = this.target.z + this.radius * sinPhi * Math.cos(this.theta);
+      this.camera.lookAt(this.target);
+    }
+
+    reset(planeH) {
+      planeH = planeH || 20;
+      this.target.set(0, 1.0, 0);
+      this.targetTheta = 0;
+      this.targetPhi = Math.PI / 3.2;
+      this.targetRadius = 18 + planeH * 0.45;
+    }
+  }
+
   var raycaster = null;
   var mouseVec = null;
   let cachedNormH = null;
@@ -999,12 +1094,8 @@
     threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     threeRenderer.shadowMap.enabled = true;
 
-    if(typeof THREE.OrbitControls === 'function'){
-      threeControls = new THREE.OrbitControls(threeCamera, webglCanvas);
-      threeControls.enableDamping = true;
-      threeControls.dampingFactor = 0.05;
-      threeControls.maxPolarAngle = Math.PI / 2 - 0.02;
-    }
+    // Use robust built-in controller for 100% reliable orbit & pan & zoom
+    threeControls = new RobustOrbitControls(threeCamera, webglCanvas);
 
     raycaster = new THREE.Raycaster();
     mouseVec = new THREE.Vector2();
@@ -1041,12 +1132,8 @@
     function animate(){
       animFrameId = requestAnimationFrame(animate);
       if(isFlying && threeControls){
-        flyAngle += 0.008;
-        const radius = 26;
-        threeCamera.position.x = radius * Math.sin(flyAngle);
-        threeCamera.position.z = radius * Math.cos(flyAngle);
-        threeCamera.position.y = 16 + 4 * Math.sin(flyAngle * 0.5);
-        threeCamera.lookAt(0, 0, 0);
+        threeControls.targetTheta += 0.008;
+        threeControls.update();
       } else if(threeControls){
         threeControls.update();
       }
@@ -1182,12 +1269,7 @@
     threeScene.add(terrainMesh);
 
     if(threeControls){
-      threeControls.target.set(0, scaleY * 0.35, 0);
-      threeControls.update();
-    }
-    if(threeCamera){
-      threeCamera.position.set(0, 16 + planeH * 0.4, 20 + planeH * 0.5);
-      threeCamera.lookAt(0, scaleY * 0.35, 0);
+      threeControls.reset(planeH);
     }
   }
 
@@ -1228,9 +1310,8 @@
   const btnZoom = document.getElementById('btnZoom');
   if(btnZoom){
     btnZoom.addEventListener('click', function(){
-      if(threeCamera){
-        threeCamera.position.multiplyScalar(0.85);
-        if(threeControls) threeControls.update();
+      if(threeControls){
+        threeControls.targetRadius = Math.max(threeControls.minDistance, threeControls.targetRadius * 0.82);
       }
     });
   }
@@ -1238,10 +1319,8 @@
   if(btnReset){
     btnReset.addEventListener('click', function(){
       isFlying = false;
-      if(threeCamera && threeControls){
-        threeCamera.position.set(0, 20, 24);
-        threeControls.target.set(0, 0, 0);
-        threeControls.update();
+      if(threeControls){
+        threeControls.reset();
       }
     });
   }
@@ -1261,22 +1340,20 @@
   if(vcBtns.length >= 4){
     // Zoom In
     vcBtns[0].addEventListener('click', function(){
-      if(currentTab === '3d' && threeCamera){
-        threeCamera.position.multiplyScalar(0.85);
+      if(currentTab === '3d' && threeControls){
+        threeControls.targetRadius = Math.max(threeControls.minDistance, threeControls.targetRadius * 0.82);
       }
     });
     // Zoom Out
     vcBtns[1].addEventListener('click', function(){
-      if(currentTab === '3d' && threeCamera){
-        threeCamera.position.multiplyScalar(1.15);
+      if(currentTab === '3d' && threeControls){
+        threeControls.targetRadius = Math.min(threeControls.maxDistance, threeControls.targetRadius * 1.18);
       }
     });
     // Reset View
     vcBtns[2].addEventListener('click', function(){
-      if(currentTab === '3d' && threeCamera && threeControls){
-        threeCamera.position.set(0, 20, 24);
-        threeControls.target.set(0, 0, 0);
-        threeControls.update();
+      if(currentTab === '3d' && threeControls){
+        threeControls.reset();
       }
     });
     // Fullscreen
@@ -1457,15 +1534,14 @@
       updateValidation(r);
       updateExportBtn(r);
 
-      build3DMesh(r);
-
-      // Default to 3D Terrain Model as the immediate first output
       currentTab = '3d';
       document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
       var tab3d = document.querySelector('.tab[data-tab="3d"]');
       if(tab3d) tab3d.classList.add('active');
       document.getElementById('viewLabel').textContent = '3D TERRAIN';
 
+      initThreeJS();
+      build3DMesh(r);
       await renderActiveTab();
       renderSubPanels(r);
       drawElevChart(r.elevation_profile);

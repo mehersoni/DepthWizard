@@ -266,7 +266,7 @@ async def process_image_endpoint(
 
         # High-resolution previews for crisp dashboard visualization
         rgb_b64   = encode_rgb_to_base64_jpeg(result["rgb"], max_size=1280, quality=92)
-        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"], "turbo", max_size=1280)
+        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"], "plasma", max_size=1280)
         dsm_b64   = encode_colormap_to_base64_jpeg(result["height_map"], "turbo", max_size=1280, hillshade=result.get("hillshade"))
         slope_b64 = encode_colormap_to_base64_jpeg(result["slope_map"], "magma", max_size=1280, vmin=0.0, vmax=45.0)
         conf_b64  = encode_colormap_to_base64_jpeg(result["confidence_map"], "viridis", max_size=1280, vmin=0.0, vmax=1.0)
