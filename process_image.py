@@ -496,6 +496,10 @@ def process_image(
         "offset_b": None
     }
 
+    # Normalize calibration method
+    if not calibration_method or calibration_method.lower() in ["none", "linear", "ols", "default"]:
+        calibration_method = "linear"
+
     if is_georeferenced:
         # Path A: GCP Calibration
         if gcps is not None and len(gcps) > 0:
