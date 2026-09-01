@@ -147,6 +147,8 @@ custom_css = """
 body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
 .gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; min-height: 100vh !important; background: #08080a; }
 #custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
+"""
+
 # -----------------------------------------------------------------------------
 # Gradio & FastAPI Route Definitions
 # -----------------------------------------------------------------------------
