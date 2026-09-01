@@ -1238,31 +1238,15 @@
     }, delay);
 
     try {
-      var baseOrigin = '';
-      try {
-        if(window.location && window.location.origin && window.location.origin.startsWith('http') && window.location.origin !== 'null'){
-          baseOrigin = window.location.origin;
-        } else if(window.parent && window.parent.location && window.parent.location.origin && window.parent.location.origin.startsWith('http') && window.parent.location.origin !== 'null'){
-          baseOrigin = window.parent.location.origin;
-        }
-      } catch(e_origin) {
-        baseOrigin = '';
-      }
+      // The iframe is served from /demo.html on the Space's own origin.
+      // window.location.origin is always https://mehersoni-depthwizard.hf.space here.
+      var baseUrl = window.location.origin;
 
-      var endpointsToTry = ['/process', '/api/process', '/gradio/process'];
-      var resp = null;
-      var lastErrorMsg = 'Not Found';
+      var resp = await fetch(baseUrl + '/process', { method: 'POST', body: formData });
 
-      for(var i = 0; i < endpointsToTry.length; i++){
-        var targetUrl = (baseOrigin ? baseOrigin : '') + endpointsToTry[i];
-        try {
-          resp = await fetch(targetUrl, { method: 'POST', body: formData });
-          if(resp.status !== 404){
-            break;
-          }
-        } catch(netErr){
-          // continue to next endpoint candidate
-        }
+      // If primary fails, try /api/process once
+      if (!resp || resp.status === 404) {
+        try { resp = await fetch(baseUrl + '/api/process', { method: 'POST', body: formData }); } catch(e2){}
       }
 
       clearInterval(iv);

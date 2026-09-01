@@ -140,13 +140,11 @@ html_dashboard_path = os.path.join(os.path.dirname(__file__), "demo.html")
 if not os.path.isfile(html_dashboard_path):
     html_dashboard_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
 
-with open(html_dashboard_path, "r", encoding="utf-8") as f:
-    custom_ui_html = f.read()
-
 custom_css = """
-body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
-.gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; min-height: 100vh !important; background: #08080a; }
-#custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
+body, html { margin: 0; padding: 0; height: 100vh; overflow: hidden; background: #08080a; }
+.gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; height: 100vh !important; overflow: hidden; background: #08080a; }
+footer { display: none !important; }
+#depthwizard-direct-mount, #depthwizard-direct-mount iframe { width: 100% !important; height: 100vh !important; border: none; display: block; }
 """
 
 @spaces.GPU
@@ -161,9 +159,13 @@ with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fi
     _hidden_btn.click(fn=predict_gpu, inputs=[_hidden_in], outputs=[_hidden_out])
 
     gr.HTML(
-        f"""
-        <div id="depthwizard-direct-mount" style="width:100%; min-height:100vh; background:#08080a;">
-            {custom_ui_html}
+        """
+        <div id="depthwizard-direct-mount" style="width:100%;height:100vh;overflow:hidden;">
+            <iframe
+                src="/demo.html"
+                style="width:100%;height:100%;border:none;display:block;"
+                allow="cross-origin-isolated"
+            ></iframe>
         </div>
         """
     )
