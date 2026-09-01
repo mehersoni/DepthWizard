@@ -281,7 +281,8 @@ async def process_image_endpoint(
         s_list = [None if np.isnan(v) else float(v) for v in s_flat]
         c_list = [None if np.isnan(v) else float(v) for v in c_flat]
 
-        session_id = tempfile.NamedTemporaryFile().name.split(os.sep)[-1][:8]
+        import uuid
+        session_id = uuid.uuid4().hex[:12]
         os.makedirs("outputs/export", exist_ok=True)
         export_ext      = ".tif" if georeferenced else ".png"
         export_filename = f"depthwizard_{session_id}_{'dsm' if calibrated else 'rdsm'}{export_ext}"

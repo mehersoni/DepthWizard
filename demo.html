@@ -438,7 +438,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>
           Relative DSM (Non-georeferenced)
         </div>
-        <button class="process-btn" id="processBtn">
+        <button class="process-btn" id="processBtn" disabled>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           Process Image
         </button>
@@ -723,8 +723,10 @@
   });
 
   function populateFileCardFromResponse(r){
+    var meta = r.metadata || {};
     document.getElementById('fcrs').textContent = r.crs || 'Non-georeferenced';
-    document.getElementById('fres').textContent = r.gsd_x ? (r.gsd_x + ' m/px') : '—';
+    var gsd = meta.gsd_x || r.gsd_x;
+    document.getElementById('fres').textContent = gsd ? (parseFloat(gsd).toFixed(3) + ' m/px') : '—';
     document.getElementById('fdims').textContent = r.width + ' \u00d7 ' + r.height;
   }
 
@@ -794,10 +796,10 @@
       document.getElementById('valBias').textContent = '—';
       return;
     }
-    document.getElementById('valMAE').textContent = v.mae.toFixed(2) + ' m';
-    document.getElementById('valRMSE').textContent = v.rmse.toFixed(2) + ' m';
-    document.getElementById('valR2').textContent = v.r2.toFixed(2);
-    document.getElementById('valBias').textContent = (v.bias >= 0 ? '+' : '') + v.bias.toFixed(2) + ' m';
+    document.getElementById('valMAE').textContent  = v.mae  != null ? v.mae.toFixed(2)  + ' m' : '—';
+    document.getElementById('valRMSE').textContent = v.rmse != null ? v.rmse.toFixed(2) + ' m' : '—';
+    document.getElementById('valR2').textContent   = v.r2   != null ? v.r2.toFixed(3)          : '—';
+    document.getElementById('valBias').textContent = v.bias != null ? ((v.bias >= 0 ? '+' : '') + v.bias.toFixed(2) + ' m') : '—';
   }
 
   function drawElevChart(profile){
@@ -810,16 +812,27 @@
     var ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
     var W = rect.width, H = rect.height;
-    var padL = 34, padB = 20, padT = 10, padR = 8;
+    var padL = 46, padB = 20, padT = 10, padR = 8;
     var plotW = W - padL - padR, plotH = H - padT - padB;
 
     ctx.clearRect(0, 0, W, H);
 
-    var vals = profile || [];
-    if(!vals.length) return;
-    var mn = Math.min.apply(null, vals);
-    var mx = Math.max.apply(null, vals);
-    var span = (mx - mn) || 1;
+    // profile is an array of {x, elevation} objects
+    var rawProfile = profile || [];
+    if(!rawProfile.length){ return; }
+
+    // Extract numeric elevation values, replace nulls with 0
+    var vals = rawProfile.map(function(pt){
+      var v = (pt && pt.elevation !== undefined && pt.elevation !== null) ? pt.elevation : null;
+      return v;
+    });
+    var validVals = vals.filter(function(v){ return v !== null && isFinite(v); });
+    if(!validVals.length){ return; }
+
+    var mn = Math.min.apply(null, validVals);
+    var mx = Math.max.apply(null, validVals);
+    var span = (mx - mn) > 1e-6 ? (mx - mn) : 1;
+    var unit = (lastResult && lastResult.height_unit) ? lastResult.height_unit : '';
 
     ctx.strokeStyle = '#232326';
     ctx.lineWidth = 1;
@@ -827,19 +840,22 @@
     ctx.fillStyle = '#5c5c60';
     for(var g = 0; g <= 4; g++){
       var v = mn + (span * g / 4);
-      var y = padT + plotH - (g / 4) * plotH;
-      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
-      ctx.fillText(v.toFixed(1) + (lastResult && lastResult.height_unit ? lastResult.height_unit : 'm'), 2, y + 3);
+      var yy = padT + plotH - (g / 4) * plotH;
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+      ctx.fillText(v.toFixed(1) + (unit ? ' ' + unit : ''), 2, yy + 3);
     }
 
     ctx.setLineDash([]);
     ctx.strokeStyle = '#f2f2f0';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
+    var started = false;
     for(var i = 0; i < vals.length; i++){
-      var x = padL + (i / (vals.length - 1)) * plotW;
-      var y = padT + plotH - ((vals[i] - mn) / span) * plotH;
-      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      var xp = padL + (i / (vals.length - 1)) * plotW;
+      var vv = vals[i];
+      if(vv === null || !isFinite(vv)){ started = false; continue; }
+      var yp = padT + plotH - ((vv - mn) / span) * plotH;
+      if(!started){ ctx.moveTo(xp, yp); started = true; } else { ctx.lineTo(xp, yp); }
     }
     ctx.stroke();
   }
@@ -1325,6 +1341,6 @@
   }
 
   showPlaceholderCanvases();
-  setStep(4, 5);
+  setStep(0, 0);
 })();
 </script></body></html>
