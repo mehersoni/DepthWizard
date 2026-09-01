@@ -736,6 +736,8 @@ def process_image(
 
     return {
         "height_map": height_map.astype(np.float32),
+        "depth_map": rdsm.astype(np.float32),   # normalized [0,1] monocular depth
+        "error_map": None,                        # populated only when validation DEM is supplied
         "width": int(w),
         "height": int(h),
         "mode": mode,
