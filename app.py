@@ -150,12 +150,6 @@ body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
 """
 
 with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
-    with gr.Row(visible=False):
-        hidden_in = gr.File(label="in")
-        hidden_btn = gr.Button(value="btn")
-        hidden_out = gr.JSON(label="out")
-        hidden_btn.click(fn=run_depth_inference, inputs=[hidden_in], outputs=[hidden_out])
-
     gr.HTML(
         f"""
         <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
