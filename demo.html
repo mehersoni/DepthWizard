@@ -1238,12 +1238,25 @@
     }, delay);
 
     try {
-      var resp = await fetch(API_BASE + '/process', { method: 'POST', body: formData });
+      var apiEndpoint = (window.location.origin && window.location.origin.startsWith('http')) 
+        ? window.location.origin + '/process' 
+        : '/process';
+
+      var resp = await fetch(apiEndpoint, { method: 'POST', body: formData });
       clearInterval(iv);
 
       if(!resp.ok){
-        var errBody = await resp.json().catch(function(){ return {error: resp.statusText}; });
-        throw new Error(errBody.error || errBody.message || 'Processing failed');
+        var errorMsg = 'Server Error (' + resp.status + ')';
+        try {
+          var errBody = await resp.json();
+          errorMsg = errBody.detail || errBody.error || errBody.message || errorMsg;
+        } catch(e) {
+          try {
+            var errText = await resp.text();
+            if(errText) errorMsg = errText.substring(0, 150);
+          } catch(e2) {}
+        }
+        throw new Error(errorMsg);
       }
 
       var r = await resp.json();
@@ -1286,7 +1299,7 @@
     } catch(err){
       clearInterval(iv);
       setStep(0, 0);
-      statusText.textContent = 'Error: ' + err.message;
+      statusText.textContent = 'Failed: ' + err.message;
       processBtn.disabled = false;
       console.error('Process error:', err);
       alert('Processing failed: ' + err.message);

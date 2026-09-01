@@ -332,6 +332,13 @@ async def process_image_endpoint(
 
         return JSONResponse(content=sanitize_for_json(response_payload))
 
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Processing failed: {str(exc)}", "detail": str(exc)}
+        )
     finally:
         try:
             if os.path.exists(temp_path):
