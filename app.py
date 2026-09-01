@@ -149,19 +149,6 @@ body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
 #custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
 """
 
-# -----------------------------------------------------------------------------
-# FastAPI API Server with Integrated /process & /export routes
-# -----------------------------------------------------------------------------
-app = FastAPI(title="DepthWizard Engine", version="2.1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 @spaces.GPU
 def predict_gpu(image_path: str) -> str:
     """ZeroGPU entrypoint."""
@@ -182,14 +169,14 @@ with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fi
     )
 
 
-@app.get("/health")
-@app.post("/health")
+@demo.app.get("/health")
+@demo.app.post("/health")
 def health_check():
     return {"status": "online", "service": "DepthWizard Engine"}
 
 
-@app.get("/demo.html", response_class=HTMLResponse)
-@app.get("/demo", response_class=HTMLResponse)
+@demo.app.get("/demo.html", response_class=HTMLResponse)
+@demo.app.get("/demo", response_class=HTMLResponse)
 def serve_demo():
     html_path = os.path.join(os.path.dirname(__file__), "demo.html")
     if not os.path.isfile(html_path):
@@ -198,8 +185,8 @@ def serve_demo():
         return HTMLResponse(content=f.read())
 
 
-@app.get("/index.html", response_class=HTMLResponse)
-@app.get("/landing", response_class=HTMLResponse)
+@demo.app.get("/index.html", response_class=HTMLResponse)
+@demo.app.get("/landing", response_class=HTMLResponse)
 def serve_landing():
     html_path = os.path.join(os.path.dirname(__file__), "index.html")
     if not os.path.isfile(html_path):
@@ -208,7 +195,7 @@ def serve_landing():
         return HTMLResponse(content=f.read())
 
 
-@app.get("/export/{session_id}")
+@demo.app.get("/export/{session_id}")
 def download_export(session_id: str):
     if session_id not in EXPORT_CACHE:
         raise HTTPException(status_code=404, detail="Export session not found.")
@@ -220,9 +207,9 @@ def download_export(session_id: str):
     return FileResponse(path=filepath, filename=filename, media_type="application/octet-stream")
 
 
-@app.post("/process")
-@app.post("/api/process")
-@app.post("/gradio/process")
+@demo.app.post("/process")
+@demo.app.post("/api/process")
+@demo.app.post("/gradio/process")
 async def process_image_endpoint(
     file: UploadFile = File(...),
     gcps: Optional[str] = Form(None),
@@ -392,20 +379,6 @@ async def process_image_endpoint(
         except Exception:
             pass
 
-
-# Mount all FastAPI routes onto Gradio's internal FastAPI app
-demo.app.include_router(app.router)
-
-# Also ensure /demo.html and / serve the custom Three.js interface
-@demo.app.get("/", response_class=HTMLResponse)
-@demo.app.get("/demo.html", response_class=HTMLResponse)
-@demo.app.get("/demo", response_class=HTMLResponse)
-def serve_root_demo():
-    html_path = os.path.join(os.path.dirname(__file__), "demo.html")
-    if not os.path.isfile(html_path):
-        html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
-    with open(html_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
 
 if __name__ == "__main__":
     get_model()
