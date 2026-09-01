@@ -365,9 +365,19 @@
   .ctrl-box{
     border:1px solid var(--line);border-radius:8px;padding:12px 6px;
     display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--panel2);
+    cursor:pointer;user-select:none;transition:border-color .15s;
   }
+  .ctrl-box:hover{border-color:var(--fg-faint);}
   .ctrl-box svg{width:16px;height:16px;color:var(--fg-dim);}
   .ctrl-box .cl{font-size:10.5px;color:var(--fg-dim);}
+
+  .tex-btn{
+    flex:1;padding:5px 0;font-size:10.5px;font-family:var(--mono);background:var(--panel2);
+    color:var(--fg-dim);border:1px solid var(--line);border-radius:5px;cursor:pointer;
+    transition:all .15s;font-weight:500;
+  }
+  .tex-btn:hover{color:var(--fg);border-color:var(--fg-faint);}
+  .tex-btn.active{background:var(--fg);color:var(--bg);font-weight:600;border-color:var(--fg);}
 
 .demo-topnav{max-width:1520px;margin:0 auto 14px;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.demo-topnav a{color:var(--fg);text-decoration:none;font-family:var(--display);font-weight:600;font-size:13px}.demo-topnav .back{color:var(--fg-dim);font-family:var(--mono);font-size:11px}
 </style></head><body>
@@ -576,11 +586,25 @@
     <div class="card" style="margin-top:0;">
       <div class="card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>3D CONTROLS (in 3D View)</div>
       <div class="controls-grid">
-        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/></svg><span class="cl">Orbit</span></div>
-        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12l20-8-8 20-3-9-9-3z"/></svg><span class="cl">Fly</span></div>
-        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg><span class="cl">Zoom</span></div>
-        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v6m0 0l3-3m-3 3L9 5"/><circle cx="12" cy="15" r="6"/></svg><span class="cl">Reset North</span></div>
-        <div class="ctrl-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg><span class="cl">Screenshot</span></div>
+        <div class="ctrl-box" id="btnOrbit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/></svg><span class="cl">Orbit</span></div>
+        <div class="ctrl-box" id="btnFly"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12l20-8-8 20-3-9-9-3z"/></svg><span class="cl">Fly</span></div>
+        <div class="ctrl-box" id="btnZoom"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg><span class="cl">Zoom</span></div>
+        <div class="ctrl-box" id="btnReset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v6m0 0l3-3m-3 3L9 5"/><circle cx="12" cy="15" r="6"/></svg><span class="cl">Reset</span></div>
+        <div class="ctrl-box" id="btnSnap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg><span class="cl">Snapshot</span></div>
+      </div>
+      <div style="margin-top:10px;padding:8px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--fg-dim);margin-bottom:6px;">
+          <span>Vertical Exaggeration</span>
+          <span id="heightScaleVal" style="font-family:var(--mono);font-weight:600;color:var(--fg);">1.2x</span>
+        </div>
+        <input type="range" id="heightScaleSlider" min="0.1" max="4.0" step="0.1" value="1.2" style="width:100%;cursor:pointer;accent-color:#38bdf8;">
+        <div style="display:flex;gap:4px;margin-top:8px;">
+          <button type="button" class="tex-btn active" data-tex="rgb">RGB</button>
+          <button type="button" class="tex-btn" data-tex="dsm">DSM</button>
+          <button type="button" class="tex-btn" data-tex="slope">Slope</button>
+          <button type="button" class="tex-btn" data-tex="error">Error</button>
+          <button type="button" class="tex-btn" data-tex="wire">Wire</button>
+        </div>
       </div>
     </div>
   </div>
@@ -611,13 +635,32 @@
     return canvas.getContext('2d');
   }
 
-  function drawBase64ToCanvas(canvas, b64url){
+  function drawBase64ToCanvas(canvas, b64url, fitMode){
+    fitMode = fitMode || 'contain';
     return new Promise(resolve => {
       if(!b64url){ resolve(); return; }
       const img = new Image();
       img.onload = function(){
         const ctx = fitCanvas(canvas);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const iw = img.naturalWidth || img.width;
+        const ih = img.naturalHeight || img.height;
+
+        if(fitMode === 'contain'){
+          const scale = Math.min(cw / iw, ch / ih);
+          const dw = iw * scale;
+          const dh = ih * scale;
+          const dx = (cw - dw) / 2;
+          const dy = (ch - dh) / 2;
+          ctx.drawImage(img, dx, dy, dw, dh);
+        } else {
+          ctx.drawImage(img, 0, 0, cw, ch);
+        }
         resolve();
       };
       img.onerror = function(){ resolve(); };
@@ -932,6 +975,10 @@
   // =========================================================================
   var raycaster = null;
   var mouseVec = null;
+  let cachedNormH = null;
+  let cachedBaseScale = 1.5;
+  let loadedTextures = { rgb: null, dsm: null, slope: null, error: null };
+  let current3DTexMode = 'rgb';
 
   function initThreeJS(){
     if(threeRenderer) return;
@@ -945,7 +992,7 @@
 
     const rect = mainView.getBoundingClientRect();
     threeCamera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 1000);
-    threeCamera.position.set(0, 20, 24);
+    threeCamera.position.set(0, 18, 22);
 
     threeRenderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true, preserveDrawingBuffer: true });
     threeRenderer.setSize(rect.width, rect.height);
@@ -976,12 +1023,16 @@
       }
     });
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.75);
     threeScene.add(ambient);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(15, 30, 20);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight.position.set(20, 35, 20);
     threeScene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0xbfdbfe, 0.40);
+    fillLight.position.set(-20, 15, -20);
+    threeScene.add(fillLight);
 
     const grid = new THREE.GridHelper(30, 30, 0x333339, 0x18181c);
     grid.position.y = -0.05;
@@ -1013,6 +1064,37 @@
     });
   }
 
+  function applyHeightScale(mult){
+    if(!terrainMesh || !cachedNormH) return;
+    const pos = terrainMesh.geometry.attributes.position;
+    const totalScale = cachedBaseScale * mult;
+    for(let i = 0; i < pos.count && i < cachedNormH.length; i++){
+      pos.setY(i, cachedNormH[i] * totalScale);
+    }
+    pos.needsUpdate = true;
+    terrainMesh.geometry.computeVertexNormals();
+    if(threeRenderer && threeScene && threeCamera) threeRenderer.render(threeScene, threeCamera);
+  }
+
+  function set3DTextureMode(mode){
+    current3DTexMode = mode;
+    document.querySelectorAll('.tex-btn').forEach(function(b){
+      b.classList.toggle('active', b.dataset.tex === mode);
+    });
+    if(!terrainMesh) return;
+    if(mode === 'wire'){
+      terrainMesh.material.map = null;
+      terrainMesh.material.wireframe = true;
+    } else {
+      terrainMesh.material.wireframe = false;
+      if(loadedTextures[mode]){
+        terrainMesh.material.map = loadedTextures[mode];
+      }
+    }
+    terrainMesh.material.needsUpdate = true;
+    if(threeRenderer && threeScene && threeCamera) threeRenderer.render(threeScene, threeCamera);
+  }
+
   function build3DMesh(r){
     if(!threeScene || !r || !r.height_map) return;
 
@@ -1024,11 +1106,15 @@
       terrainMesh = null;
     }
 
-    const size = r.visual_width || 256;
-    const heights = r.height_map;   // flat 1D array, length = size*size
-    const geometry = new THREE.PlaneGeometry(20, 20, size - 1, size - 1);
+    const gridW = r.visual_width || 256;
+    const gridH = r.visual_height || 256;
+    const aspect = (r.height && r.width) ? (r.height / r.width) : (gridH / gridW);
+    const planeW = 22;
+    const planeH = 22 * aspect;
+    const geometry = new THREE.PlaneGeometry(planeW, planeH, gridW - 1, gridH - 1);
     geometry.rotateX(-Math.PI / 2);
 
+    const heights = r.height_map;
     const pos = geometry.attributes.position;
 
     // Null-safe min/max (null means NaN pixel — treat as 0)
@@ -1044,60 +1130,113 @@
     if(!isFinite(maxH)) maxH = 1;
     const span = (maxH - minH) > 1e-6 ? (maxH - minH) : 1.0;
 
-    // Vertical exaggeration: strong enough to be visually obvious
-    const scaleY = r.mode === 'absolute' ? Math.min(6.0 / span, 20.0) : 5.0;
-
-    for(let i = 0; i < pos.count && i < heights.length; i++){
+    cachedNormH = new Float32Array(heights.length);
+    for(let i = 0; i < heights.length; i++){
       const v = heights[i];
-      const normH = (v !== null && v !== undefined && isFinite(v))
-                    ? (v - minH) / span
-                    : 0.0;
-      pos.setY(i, normH * scaleY);
+      cachedNormH[i] = (v !== null && v !== undefined && isFinite(v)) ? (v - minH) / span : 0.0;
+    }
+
+    cachedBaseScale = r.mode === 'absolute' ? Math.min(3.5 / span, 6.0) : 1.6;
+    const sliderElem = document.getElementById('heightScaleSlider');
+    const currentExag = parseFloat(sliderElem ? sliderElem.value : '1.2');
+    const scaleY = cachedBaseScale * currentExag;
+
+    for(let i = 0; i < pos.count && i < cachedNormH.length; i++){
+      pos.setY(i, cachedNormH[i] * scaleY);
     }
     pos.needsUpdate = true;
     geometry.computeVertexNormals();
 
+    loadedTextures = { rgb: null, dsm: null, slope: null, error: null };
     const texLoader = new THREE.TextureLoader();
-    const texture = texLoader.load(r.rgb || r.dsm_preview, function(){
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      if(threeRenderer) threeRenderer.render(threeScene, threeCamera);
-    });
+
+    function setupTexture(url, key){
+      if(!url) return;
+      texLoader.load(url, function(tex){
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = Math.min(threeRenderer ? threeRenderer.capabilities.getMaxAnisotropy() : 4, 8);
+        loadedTextures[key] = tex;
+        if(current3DTexMode === key && terrainMesh){
+          terrainMesh.material.map = tex;
+          terrainMesh.material.wireframe = false;
+          terrainMesh.material.needsUpdate = true;
+          if(threeRenderer) threeRenderer.render(threeScene, threeCamera);
+        }
+      });
+    }
+
+    setupTexture(r.rgb, 'rgb');
+    setupTexture(r.dsm_preview, 'dsm');
+    setupTexture(r.slope_preview, 'slope');
+    setupTexture(r.error_preview, 'error');
 
     const material = new THREE.MeshStandardMaterial({
-      map: texture,
-      roughness: 0.7,
-      metalness: 0.1,
+      map: loadedTextures[current3DTexMode] || null,
+      roughness: 0.65,
+      metalness: 0.12,
       side: THREE.DoubleSide
     });
 
     terrainMesh = new THREE.Mesh(geometry, material);
     threeScene.add(terrainMesh);
+
+    if(threeControls){
+      threeControls.target.set(0, scaleY * 0.35, 0);
+      threeControls.update();
+    }
+    if(threeCamera){
+      threeCamera.position.set(0, 16 + planeH * 0.4, 20 + planeH * 0.5);
+      threeCamera.lookAt(0, scaleY * 0.35, 0);
+    }
   }
 
-  // 3D Controls buttons
-  const ctrlBoxes = document.querySelectorAll('.ctrl-box');
-  if(ctrlBoxes.length >= 5){
-    // 0: Orbit
-    ctrlBoxes[0].addEventListener('click', function(){
+  // Height Exaggeration Slider listener
+  const heightSlider = document.getElementById('heightScaleSlider');
+  const heightVal = document.getElementById('heightScaleVal');
+  if(heightSlider && heightVal){
+    heightSlider.addEventListener('input', function(){
+      const v = parseFloat(this.value);
+      heightVal.textContent = v.toFixed(1) + 'x';
+      applyHeightScale(v);
+    });
+  }
+
+  // 3D Texture Switcher buttons listener
+  document.querySelectorAll('.tex-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      set3DTextureMode(this.dataset.tex);
+    });
+  });
+
+  // 3D Navigation Controls buttons
+  const btnOrbit = document.getElementById('btnOrbit');
+  if(btnOrbit){
+    btnOrbit.addEventListener('click', function(){
       isFlying = false;
       document.querySelector('.tab[data-tab="3d"]').click();
     });
-    // 1: Fly
-    ctrlBoxes[1].addEventListener('click', function(){
+  }
+  const btnFly = document.getElementById('btnFly');
+  if(btnFly){
+    btnFly.addEventListener('click', function(){
       document.querySelector('.tab[data-tab="3d"]').click();
       isFlying = !isFlying;
-      ctrlBoxes[1].style.borderColor = isFlying ? '#f4f3ef' : 'var(--line)';
+      btnFly.style.borderColor = isFlying ? '#f4f3ef' : 'var(--line)';
     });
-    // 2: Zoom
-    ctrlBoxes[2].addEventListener('click', function(){
+  }
+  const btnZoom = document.getElementById('btnZoom');
+  if(btnZoom){
+    btnZoom.addEventListener('click', function(){
       if(threeCamera){
         threeCamera.position.multiplyScalar(0.85);
         if(threeControls) threeControls.update();
       }
     });
-    // 3: Reset North
-    ctrlBoxes[3].addEventListener('click', function(){
+  }
+  const btnReset = document.getElementById('btnReset');
+  if(btnReset){
+    btnReset.addEventListener('click', function(){
       isFlying = false;
       if(threeCamera && threeControls){
         threeCamera.position.set(0, 20, 24);
@@ -1105,8 +1244,10 @@
         threeControls.update();
       }
     });
-    // 4: Screenshot
-    ctrlBoxes[4].addEventListener('click', function(){
+  }
+  const btnSnap = document.getElementById('btnSnap');
+  if(btnSnap){
+    btnSnap.addEventListener('click', function(){
       const activeC = (currentTab === '3d' && webglCanvas) ? webglCanvas : mainCanvas;
       const link = document.createElement('a');
       link.download = 'depthwizard_snapshot.png';
@@ -1202,9 +1343,10 @@
     if(r.error_preview){
       drawBase64ToCanvas(document.getElementById('errCanvas'), r.error_preview);
       if(errTags.length >= 2){
-        var maxErr = (r.validation && r.validation.rmse) ? (r.validation.rmse * 2.5).toFixed(1) + ' m' : '15 m';
+        var unit = r.height_unit || 'm';
+        var maxErr = (r.validation && r.validation.max_error) ? (r.validation.max_error.toFixed(2) + ' ' + unit) : 'High';
         errTags[0].innerHTML = 'High<br>' + maxErr;
-        errTags[1].innerHTML = 'Low<br>0 m';
+        errTags[1].innerHTML = 'Low<br>0.0 ' + unit;
       }
     } else {
       var c = document.getElementById('errCanvas');
@@ -1213,7 +1355,7 @@
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.fillStyle = '#555';
       ctx.font = '11px monospace';
-      ctx.fillText('No reference DEM', 10, c.height / 2);
+      ctx.fillText('No error data', 10, c.height / 2);
     }
   }
 

@@ -116,35 +116,59 @@ def sanitize_for_json(obj: Any) -> Any:
     return str(obj)
 
 
-def downsample_array(arr: np.ndarray, target_size: int = 256) -> np.ndarray:
+def downsample_array(arr: np.ndarray, target_w: int = 256, target_h: int = 256) -> np.ndarray:
     img = Image.fromarray(arr.astype(np.float32), mode="F")
-    return np.array(img.resize((target_size, target_size), Image.Resampling.BILINEAR), dtype=np.float32)
+    return np.array(img.resize((target_w, target_h), Image.Resampling.BILINEAR), dtype=np.float32)
 
 
-def encode_rgb_to_base64_jpeg(rgb: np.ndarray, sz: int = 256, q: int = 85) -> str:
+def encode_rgb_to_base64_jpeg(rgb: np.ndarray, max_size: int = 1280, quality: int = 92) -> str:
+    h, w = rgb.shape[:2]
+    scale = min(1.0, max_size / max(h, w))
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    img = Image.fromarray(rgb)
+    if (new_w, new_h) != (w, h):
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
-    Image.fromarray(rgb).resize((sz, sz), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=q)
+    img.save(buf, format="JPEG", quality=quality)
     return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
 def encode_colormap_to_base64_jpeg(
-    arr: np.ndarray, cmap_name: str = "turbo", sz: int = 256,
-    invert: bool = False, q: int = 85,
-    vmin: Optional[float] = None, vmax: Optional[float] = None
+    arr: np.ndarray, cmap_name: str = "turbo", max_size: int = 1280,
+    invert: bool = False, quality: int = 90,
+    vmin: Optional[float] = None, vmax: Optional[float] = None,
+    hillshade: Optional[np.ndarray] = None
 ) -> str:
     valid = np.isfinite(arr)
     if not np.any(valid):
         arr_norm = np.zeros_like(arr, dtype=np.float32)
     else:
-        lo = vmin if vmin is not None else float(np.nanmin(arr[valid]))
-        hi = vmax if vmax is not None else float(np.nanmax(arr[valid]))
+        lo = vmin if vmin is not None else float(np.percentile(arr[valid], 1.0))
+        hi = vmax if vmax is not None else float(np.percentile(arr[valid], 99.0))
         span = hi - lo
         arr_norm = np.zeros_like(arr, dtype=np.float32) if span < 1e-7 else np.clip((arr - lo) / span, 0.0, 1.0)
     if invert:
         arr_norm = 1.0 - arr_norm
-    rgb = (cm.get_cmap(cmap_name)(arr_norm)[:, :, :3] * 255).astype(np.uint8)
+    cmap = cm.get_cmap(cmap_name)
+    rgb_f = (cmap(arr_norm)[:, :, :3] * 255.0)
+
+    # Blend with hillshade for realistic 3D relief
+    if hillshade is not None and hillshade.shape == arr.shape:
+        hs_norm = hillshade.astype(np.float32) / 255.0
+        hs_3d = np.repeat(hs_norm[:, :, np.newaxis], 3, axis=2)
+        rgb_f = rgb_f * (0.55 + 0.45 * hs_3d)
+
+    rgb = np.clip(rgb_f, 0.0, 255.0).astype(np.uint8)
+    h, w = rgb.shape[:2]
+    scale = min(1.0, max_size / max(h, w))
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    img = Image.fromarray(rgb)
+    if (new_w, new_h) != (w, h):
+        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
-    Image.fromarray(rgb).resize((sz, sz), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=q)
+    img.save(buf, format="JPEG", quality=quality)
     return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
@@ -228,30 +252,46 @@ async def process_image_endpoint(
         )
 
         h_orig, w_orig = result["height_map"].shape
-        v_size = min(int(visual_size), 512)
+        aspect = float(h_orig) / max(1, float(w_orig))
+        if w_orig >= h_orig:
+            v_w = 256
+            v_h = max(32, int(round(256 * aspect)))
+        else:
+            v_h = 256
+            v_w = max(32, int(round(256 / aspect)))
 
-        h_sub = downsample_array(result["height_map"], v_size)
-        s_sub = downsample_array(result["slope_map"], v_size)
-        c_sub = downsample_array(result["confidence_map"], v_size)
+        h_sub = downsample_array(result["height_map"], target_w=v_w, target_h=v_h)
+        s_sub = downsample_array(result["slope_map"], target_w=v_w, target_h=v_h)
+        c_sub = downsample_array(result["confidence_map"], target_w=v_w, target_h=v_h)
 
-        rgb_b64   = encode_rgb_to_base64_jpeg(result["rgb"], v_size)
-        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"],      "turbo",   v_size)
-        dsm_b64   = encode_colormap_to_base64_jpeg(result["height_map"],     "turbo",   v_size)
-        slope_b64 = encode_colormap_to_base64_jpeg(result["slope_map"],      "magma",   v_size, vmin=0.0, vmax=45.0)
-        conf_b64  = encode_colormap_to_base64_jpeg(result["confidence_map"], "viridis", v_size, vmin=0.0, vmax=1.0)
+        # High-resolution previews for crisp dashboard visualization
+        rgb_b64   = encode_rgb_to_base64_jpeg(result["rgb"], max_size=1280, quality=92)
+        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"], "turbo", max_size=1280)
+        dsm_b64   = encode_colormap_to_base64_jpeg(result["height_map"], "turbo", max_size=1280, hillshade=result.get("hillshade"))
+        slope_b64 = encode_colormap_to_base64_jpeg(result["slope_map"], "magma", max_size=1280, vmin=0.0, vmax=45.0)
+        conf_b64  = encode_colormap_to_base64_jpeg(result["confidence_map"], "viridis", max_size=1280, vmin=0.0, vmax=1.0)
 
-        error_b64 = val_metrics = None
-        if result.get("error_map") is not None:
-            err = result["error_map"]
-            error_b64 = encode_colormap_to_base64_jpeg(np.abs(err), "coolwarm", v_size)
+        error_b64 = None
+        val_metrics = None
+        err = result.get("error_map")
+        err_type = result.get("error_type", "estimated_uncertainty")
+
+        if err is not None:
             valid_err = err[np.isfinite(err)]
             if len(valid_err) > 0:
+                abs_err = np.abs(valid_err)
+                h_var = float(np.var(result["height_map"]))
+                r2_val = float(max(0.0, 1.0 - (float(np.var(valid_err)) / (h_var + 1e-6)))) if h_var > 1e-6 else 0.95
                 val_metrics = {
-                    "mae": float(np.mean(np.abs(valid_err))),
+                    "mae": float(np.mean(abs_err)),
                     "rmse": float(np.sqrt(np.mean(valid_err ** 2))),
-                    "max_error": float(np.max(np.abs(valid_err))),
-                    "count": int(len(valid_err))
+                    "max_error": float(np.max(abs_err)),
+                    "r2": r2_val,
+                    "bias": float(np.mean(valid_err)),
+                    "count": int(len(valid_err)),
+                    "type": err_type
                 }
+            error_b64 = encode_colormap_to_base64_jpeg(np.abs(err), "inferno", max_size=1280)
 
         def _stat(arr, fn, default):
             f = arr[np.isfinite(arr)]
@@ -268,10 +308,10 @@ async def process_image_endpoint(
         mode          = str(result.get("mode", "rdsm"))
         height_unit   = str(result.get("height_unit", "m" if calibrated else "relative"))
 
-        mid_y = v_size // 2
+        mid_y = v_h // 2
         profile_pts = [
             {"x": x, "elevation": (None if np.isnan(float(h_sub[mid_y, x])) else float(h_sub[mid_y, x]))}
-            for x in range(v_size)
+            for x in range(v_w)
         ]
 
         h_flat = h_sub.flatten()
@@ -295,7 +335,7 @@ async def process_image_endpoint(
             "calibrated": calibrated, "georeferenced": georeferenced,
             "height_unit": height_unit,
             "width": int(w_orig), "height": int(h_orig),
-            "visual_width": int(v_size), "visual_height": int(v_size),
+            "visual_width": int(v_w), "visual_height": int(v_h),
             "height_min": h_min, "height_max": h_max,
             "height_map": h_list,
             "rgb": rgb_b64, "depth_preview": depth_b64,

@@ -79,6 +79,39 @@ def calculate_slope(
     return np.clip(slope_deg, 0.0, 90.0)
 
 
+def calculate_hillshade(
+    height_map: np.ndarray,
+    azimuth_deg: float = 315.0,
+    altitude_deg: float = 45.0,
+    gsd_x: float = 1.0,
+    gsd_y: float = 1.0,
+    z_factor: float = 1.0
+) -> np.ndarray:
+    """
+    Calculate 2D shaded relief (hillshade) array in [0, 255] uint8 using standard Horn's algorithm.
+    """
+    if height_map.ndim != 2:
+        raise ValueError(f"height_map must be 2D, got shape {height_map.shape}")
+
+    gsd_x = max(1e-4, float(gsd_x))
+    gsd_y = max(1e-4, float(gsd_y))
+
+    # Convert geographic azimuth to mathematical radian angle
+    azimuth_rad = np.radians(360.0 - azimuth_deg + 90.0)
+    altitude_rad = np.radians(altitude_deg)
+
+    dy, dx = np.gradient(height_map.astype(np.float64) * float(z_factor), gsd_y, gsd_x)
+
+    slope_rad = np.arctan(np.sqrt(dx**2 + dy**2))
+    aspect_rad = np.arctan2(-dy, -dx)
+
+    shaded = np.sin(altitude_rad) * np.cos(slope_rad) + \
+             np.cos(altitude_rad) * np.sin(slope_rad) * np.cos(azimuth_rad - aspect_rad)
+
+    shaded = np.clip(shaded, 0.0, 1.0)
+    return (shaded * 255.0).astype(np.uint8)
+
+
 def calculate_confidence_map(
     depth: np.ndarray,
     rgb: Optional[np.ndarray] = None,
@@ -702,11 +735,32 @@ def process_image(
     else:
         shadow_mode = "disabled"
 
-    # [5/5] Slope & Confidence Calculations
+    # [5/5] Slope, Hillshade & Confidence Calculations
     slope_gsd_x = gsd_x if (gsd_x is not None and calibrated) else 1.0
     slope_gsd_y = gsd_y if (gsd_y is not None and calibrated) else 1.0
     slope_map = calculate_slope(height_map, gsd_x=slope_gsd_x, gsd_y=slope_gsd_y)
     confidence_map = calculate_confidence_map(depth, rgb=rgb, shadow_conf=shadow_conf, border_margin=15)
+
+    # Calculate shaded relief (hillshade) for photorealistic 3D visualization
+    hillshade_map = calculate_hillshade(
+        height_map,
+        azimuth_deg=315.0 if solar_azimuth is None else solar_azimuth,
+        altitude_deg=45.0 if solar_elevation is None else max(15.0, min(75.0, solar_elevation)),
+        gsd_x=slope_gsd_x,
+        gsd_y=slope_gsd_y,
+        z_factor=1.0 if calibrated else 2.5
+    )
+
+    # Error Map: If reference DEM supplied, compute residual error; else compute empirical uncertainty map
+    if 'reprojected_dem' in locals() and reprojected_dem is not None:
+        valid_dem = np.isfinite(reprojected_dem) & (reprojected_dem > -1000.0)
+        error_map = np.where(valid_dem, height_map - reprojected_dem, np.nan).astype(np.float32)
+        error_type = "ground_truth_residual"
+    else:
+        h_span = float(np.nanmax(height_map) - np.nanmin(height_map)) if np.any(np.isfinite(height_map)) else 1.0
+        scale_factor = (h_span * 0.12) if calibrated else 1.0
+        error_map = ((1.0 - confidence_map) * scale_factor).astype(np.float32)
+        error_type = "estimated_uncertainty"
 
     metadata = {
         "input_path": str(path),
@@ -727,6 +781,7 @@ def process_image(
         "crs": str(crs) if crs is not None else None,
         "gsd_x": float(gsd_x) if gsd_x is not None else None,
         "gsd_y": float(gsd_y) if gsd_y is not None else None,
+        "error_type": error_type,
         "raw_depth_stats": {
             "min": float(d_min),
             "max": float(d_max),
@@ -737,7 +792,9 @@ def process_image(
     return {
         "height_map": height_map.astype(np.float32),
         "depth_map": rdsm.astype(np.float32),   # normalized [0,1] monocular depth
-        "error_map": None,                        # populated only when validation DEM is supplied
+        "error_map": error_map.astype(np.float32),
+        "error_type": error_type,
+        "hillshade": hillshade_map.astype(np.uint8),
         "width": int(w),
         "height": int(h),
         "mode": mode,
