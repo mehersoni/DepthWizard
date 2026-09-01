@@ -1009,24 +1009,36 @@
     }
 
     const size = r.visual_width || 256;
-    const heights = r.height_map;
+    const heights = r.height_map;   // flat 1D array, length = size*size
     const geometry = new THREE.PlaneGeometry(20, 20, size - 1, size - 1);
     geometry.rotateX(-Math.PI / 2);
 
     const pos = geometry.attributes.position;
+
+    // Null-safe min/max (null means NaN pixel — treat as 0)
     let minH = Infinity, maxH = -Infinity;
     for(let i = 0; i < heights.length; i++){
       const v = heights[i];
-      if(v < minH) minH = v;
-      if(v > maxH) maxH = v;
+      if(v !== null && v !== undefined && isFinite(v)){
+        if(v < minH) minH = v;
+        if(v > maxH) maxH = v;
+      }
     }
-    const span = (maxH - minH) || 1.0;
-    const scaleY = r.mode === 'absolute' ? (4.0 / span) : 3.5;
+    if(!isFinite(minH)) minH = 0;
+    if(!isFinite(maxH)) maxH = 1;
+    const span = (maxH - minH) > 1e-6 ? (maxH - minH) : 1.0;
+
+    // Vertical exaggeration: strong enough to be visually obvious
+    const scaleY = r.mode === 'absolute' ? Math.min(6.0 / span, 20.0) : 5.0;
 
     for(let i = 0; i < pos.count && i < heights.length; i++){
-      const normH = (heights[i] - minH) / span;
+      const v = heights[i];
+      const normH = (v !== null && v !== undefined && isFinite(v))
+                    ? (v - minH) / span
+                    : 0.0;
       pos.setY(i, normH * scaleY);
     }
+    pos.needsUpdate = true;
     geometry.computeVertexNormals();
 
     const texLoader = new THREE.TextureLoader();

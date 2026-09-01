@@ -274,9 +274,12 @@ async def process_image_endpoint(
             for x in range(v_size)
         ]
 
-        h_list = np.where(np.isnan(h_sub), None, h_sub).tolist()
-        s_list = np.where(np.isnan(s_sub), None, s_sub).tolist()
-        c_list = np.where(np.isnan(c_sub), None, c_sub).tolist()
+        h_flat = h_sub.flatten()
+        s_flat = s_sub.flatten()
+        c_flat = c_sub.flatten()
+        h_list = [None if np.isnan(v) else float(v) for v in h_flat]
+        s_list = [None if np.isnan(v) else float(v) for v in s_flat]
+        c_list = [None if np.isnan(v) else float(v) for v in c_flat]
 
         session_id = tempfile.NamedTemporaryFile().name.split(os.sep)[-1][:8]
         os.makedirs("outputs/export", exist_ok=True)
