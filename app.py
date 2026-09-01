@@ -254,11 +254,11 @@ async def process_image_endpoint(
         h_orig, w_orig = result["height_map"].shape
         aspect = float(h_orig) / max(1, float(w_orig))
         if w_orig >= h_orig:
-            v_w = 256
-            v_h = max(32, int(round(256 * aspect)))
+            v_w = 320
+            v_h = max(32, int(round(320 * aspect)))
         else:
-            v_h = 256
-            v_w = max(32, int(round(256 / aspect)))
+            v_h = 320
+            v_w = max(32, int(round(320 / aspect)))
 
         h_sub = downsample_array(result["height_map"], target_w=v_w, target_h=v_h)
         s_sub = downsample_array(result["slope_map"], target_w=v_w, target_h=v_h)

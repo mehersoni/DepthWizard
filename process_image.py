@@ -510,11 +510,18 @@ def process_image(
             model, processor, device = load_model()
         depth = estimate_depth(rgb, model=model, processor=processor, device=device)
 
-    # Base scale-agnostic normalized rDSM in [0, 1]
-    d_min = float(np.min(depth))
-    d_max = float(np.max(depth))
-    d_span = (d_max - d_min) if (d_max - d_min) > 1e-6 else 1.0
-    rdsm = ((depth - d_min) / d_span).astype(np.float32)
+    # Robust percentile-based dynamic range normalization to prevent outliers from flattening relief
+    d_valid = depth[np.isfinite(depth)]
+    if len(d_valid) > 0:
+        d_p01 = float(np.percentile(d_valid, 0.5))
+        d_p99 = float(np.percentile(d_valid, 99.5))
+        d_span = (d_p99 - d_p01) if (d_p99 - d_p01) > 1e-6 else 1.0
+        rdsm = np.clip((depth - d_p01) / d_span, 0.0, 1.0).astype(np.float32)
+        d_min = d_p01
+        d_max = d_p99
+    else:
+        d_min, d_max, d_span = 0.0, 1.0, 1.0
+        rdsm = np.zeros_like(depth, dtype=np.float32)
 
     # [3/5] Calibration: Relative vs Absolute Mode
     scale_a = None

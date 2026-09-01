@@ -1151,6 +1151,67 @@
     });
   }
 
+  let cachedPlaneW = 22;
+  let cachedPlaneH = 22;
+  let cachedGridW = 256;
+  let cachedGridH = 256;
+  let skirtMesh = null;
+
+  function buildSkirtGeometry(planeW, planeH, gridW, gridH, heightsNorm, scaleY, bottomY = -0.6){
+    const geom = new THREE.BufferGeometry();
+    const positions = [];
+    const indices = [];
+
+    const idx = (row, col) => row * gridW + col;
+    const xCoord = col => (col / (gridW - 1) - 0.5) * planeW;
+    const zCoord = row => (row / (gridH - 1) - 0.5) * planeH;
+
+    let vCount = 0;
+    function addWallQuad(x1, z1, yTop1, x2, z2, yTop2){
+      positions.push(
+        x1, yTop1, z1,
+        x1, bottomY, z1,
+        x2, yTop2, z2,
+        x2, bottomY, z2
+      );
+      indices.push(
+        vCount, vCount + 1, vCount + 2,
+        vCount + 2, vCount + 1, vCount + 3
+      );
+      vCount += 4;
+    }
+
+    // Top edge
+    for(let c = 0; c < gridW - 1; c++){
+      const y1 = (heightsNorm[idx(0, c)] || 0) * scaleY;
+      const y2 = (heightsNorm[idx(0, c + 1)] || 0) * scaleY;
+      addWallQuad(xCoord(c), zCoord(0), y1, xCoord(c + 1), zCoord(0), y2);
+    }
+    // Bottom edge
+    for(let c = 0; c < gridW - 1; c++){
+      const y1 = (heightsNorm[idx(gridH - 1, c)] || 0) * scaleY;
+      const y2 = (heightsNorm[idx(gridH - 1, c + 1)] || 0) * scaleY;
+      addWallQuad(xCoord(c + 1), zCoord(gridH - 1), y2, xCoord(c), zCoord(gridH - 1), y1);
+    }
+    // Left edge
+    for(let r = 0; r < gridH - 1; r++){
+      const y1 = (heightsNorm[idx(r, 0)] || 0) * scaleY;
+      const y2 = (heightsNorm[idx(r + 1, 0)] || 0) * scaleY;
+      addWallQuad(xCoord(0), zCoord(r + 1), y2, xCoord(0), zCoord(r), y1);
+    }
+    // Right edge
+    for(let r = 0; r < gridH - 1; r++){
+      const y1 = (heightsNorm[idx(r, gridW - 1)] || 0) * scaleY;
+      const y2 = (heightsNorm[idx(r + 1, gridW - 1)] || 0) * scaleY;
+      addWallQuad(xCoord(gridW - 1), zCoord(r), y1, xCoord(gridW - 1), zCoord(r + 1), y2);
+    }
+
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+    return geom;
+  }
+
   function applyHeightScale(mult){
     if(!terrainMesh || !cachedNormH) return;
     const pos = terrainMesh.geometry.attributes.position;
@@ -1160,6 +1221,15 @@
     }
     pos.needsUpdate = true;
     terrainMesh.geometry.computeVertexNormals();
+
+    if(skirtMesh && threeScene){
+      threeScene.remove(skirtMesh);
+      skirtMesh.geometry.dispose();
+      const skirtGeom = buildSkirtGeometry(cachedPlaneW, cachedPlaneH, cachedGridW, cachedGridH, cachedNormH, totalScale);
+      skirtMesh.geometry = skirtGeom;
+      threeScene.add(skirtMesh);
+    }
+
     if(threeRenderer && threeScene && threeCamera) threeRenderer.render(threeScene, threeCamera);
   }
 
@@ -1192,19 +1262,31 @@
       terrainMesh.material.dispose();
       terrainMesh = null;
     }
+    if(skirtMesh){
+      threeScene.remove(skirtMesh);
+      skirtMesh.geometry.dispose();
+      skirtMesh.material.dispose();
+      skirtMesh = null;
+    }
 
     const gridW = r.visual_width || 256;
     const gridH = r.visual_height || 256;
     const aspect = (r.height && r.width) ? (r.height / r.width) : (gridH / gridW);
     const planeW = 22;
     const planeH = 22 * aspect;
+
+    cachedPlaneW = planeW;
+    cachedPlaneH = planeH;
+    cachedGridW = gridW;
+    cachedGridH = gridH;
+
     const geometry = new THREE.PlaneGeometry(planeW, planeH, gridW - 1, gridH - 1);
     geometry.rotateX(-Math.PI / 2);
 
     const heights = r.height_map;
     const pos = geometry.attributes.position;
 
-    // Null-safe min/max (null means NaN pixel — treat as 0)
+    // Null-safe min/max
     let minH = Infinity, maxH = -Infinity;
     for(let i = 0; i < heights.length; i++){
       const v = heights[i];
@@ -1223,7 +1305,8 @@
       cachedNormH[i] = (v !== null && v !== undefined && isFinite(v)) ? (v - minH) / span : 0.0;
     }
 
-    cachedBaseScale = r.mode === 'absolute' ? Math.min(3.5 / span, 6.0) : 1.6;
+    // Rich 3D vertical relief scale (3.6 units on 22-unit plane)
+    cachedBaseScale = 3.6;
     const sliderElem = document.getElementById('heightScaleSlider');
     const currentExag = parseFloat(sliderElem ? sliderElem.value : '1.2');
     const scaleY = cachedBaseScale * currentExag;
@@ -1260,13 +1343,24 @@
 
     const material = new THREE.MeshStandardMaterial({
       map: loadedTextures[current3DTexMode] || null,
-      roughness: 0.65,
-      metalness: 0.12,
+      roughness: 0.60,
+      metalness: 0.08,
       side: THREE.DoubleSide
     });
 
     terrainMesh = new THREE.Mesh(geometry, material);
     threeScene.add(terrainMesh);
+
+    // Build solid base skirt for realistic 3D block relief
+    const skirtGeom = buildSkirtGeometry(planeW, planeH, gridW, gridH, cachedNormH, scaleY);
+    const skirtMat = new THREE.MeshStandardMaterial({
+      color: 0x121216,
+      roughness: 0.85,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    });
+    skirtMesh = new THREE.Mesh(skirtGeom, skirtMat);
+    threeScene.add(skirtMesh);
 
     if(threeControls){
       threeControls.reset(planeH);
