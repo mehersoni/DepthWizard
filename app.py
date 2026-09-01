@@ -1,16 +1,19 @@
 """
-DepthWizard — Hugging Face Spaces (ZeroGPU + Custom FastAPI Routes)
+DepthWizard — Hugging Face Spaces (ZeroGPU compliant)
 
-Architecture: parent FastAPI app owns /process, /demo.html, /health, /export.
-Gradio is mounted at /gradio. Since FastAPI matches specific routes before mounts,
-our custom endpoints are always found first — no Gradio routing shadow possible.
+Architecture:
+  1. demo.queue().launch(prevent_thread_lock=True)
+       → Gradio creates the ACTUAL served app (demo.server_app), sets up ZeroGPU,
+         and starts uvicorn in a background thread. Main thread continues.
+  2. We insert our routes at index 0 of demo.server_app.router.routes
+       → They appear BEFORE Gradio's catch-all, so /process is always matched first.
+  3. threading.Event().wait()
+       → Main thread blocks forever so the Space stays alive.
 
 ZeroGPU compliance:
-  • @spaces.GPU decorates the inference worker AND predict_gpu
-  • _hidden_btn.click(fn=predict_gpu, ...) wires a GPU function into the Gradio
-    event graph, which is all ZeroGPU needs to allocate GPUs.
-  • We call demo.launch() with prevent_thread_lock=True so the server starts in a
-    background thread, then block with threading.Event so HF Spaces keeps running.
+  • demo.launch() is called  ✓
+  • @spaces.GPU decorates both inference functions  ✓
+  • predict_gpu is wired to _hidden_btn.click() inside the Gradio Blocks  ✓
 """
 
 import os
@@ -19,6 +22,7 @@ import json
 import base64
 import tempfile
 import threading
+import time
 import numpy as np
 from PIL import Image
 import matplotlib.cm as cm
@@ -26,10 +30,10 @@ from typing import Optional, Dict, Any
 
 import gradio as gr
 import spaces
-import uvicorn
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+
+from fastapi import UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 from starlette.concurrency import run_in_threadpool
 
 from process_image import process_image, export_dsm, export_slope
@@ -83,7 +87,7 @@ def run_depth_inference(
 
 @spaces.GPU
 def predict_gpu(image_path: str) -> str:
-    """ZeroGPU entrypoint — detected by HF Spaces AST checker."""
+    """ZeroGPU entrypoint — wired into Gradio event graph below."""
     return image_path
 
 
@@ -97,11 +101,11 @@ def sanitize_for_json(obj: Any) -> Any:
             return None
         return obj
     if isinstance(obj, (np.floating, np.float32, np.float64)):
-        val = float(obj)
-        return None if (np.isnan(val) or np.isinf(val)) else val
+        v = float(obj)
+        return None if (np.isnan(v) or np.isinf(v)) else v
     if isinstance(obj, (np.integer, np.int32, np.int64)):
         return int(obj)
-    if isinstance(obj, (np.bool_,)):
+    if isinstance(obj, np.bool_):
         return bool(obj)
     if isinstance(obj, np.ndarray):
         return [sanitize_for_json(v) for v in obj.tolist()]
@@ -117,15 +121,15 @@ def downsample_array(arr: np.ndarray, target_size: int = 256) -> np.ndarray:
     return np.array(img.resize((target_size, target_size), Image.Resampling.BILINEAR), dtype=np.float32)
 
 
-def encode_rgb_to_base64_jpeg(rgb: np.ndarray, target_size: int = 256, quality: int = 85) -> str:
+def encode_rgb_to_base64_jpeg(rgb: np.ndarray, sz: int = 256, q: int = 85) -> str:
     buf = io.BytesIO()
-    Image.fromarray(rgb).resize((target_size, target_size), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=quality)
+    Image.fromarray(rgb).resize((sz, sz), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=q)
     return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
 def encode_colormap_to_base64_jpeg(
-    arr: np.ndarray, cmap_name: str = "turbo", target_size: int = 256,
-    invert: bool = False, quality: int = 85,
+    arr: np.ndarray, cmap_name: str = "turbo", sz: int = 256,
+    invert: bool = False, q: int = 85,
     vmin: Optional[float] = None, vmax: Optional[float] = None
 ) -> str:
     valid = np.isfinite(arr)
@@ -138,48 +142,34 @@ def encode_colormap_to_base64_jpeg(
         arr_norm = np.zeros_like(arr, dtype=np.float32) if span < 1e-7 else np.clip((arr - lo) / span, 0.0, 1.0)
     if invert:
         arr_norm = 1.0 - arr_norm
-    cmap = cm.get_cmap(cmap_name)
-    rgb = (cmap(arr_norm)[:, :, :3] * 255).astype(np.uint8)
+    rgb = (cm.get_cmap(cmap_name)(arr_norm)[:, :, :3] * 255).astype(np.uint8)
     buf = io.BytesIO()
-    Image.fromarray(rgb).resize((target_size, target_size), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=quality)
+    Image.fromarray(rgb).resize((sz, sz), Image.Resampling.BILINEAR).save(buf, format="JPEG", quality=q)
     return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 
 # ---------------------------------------------------------------------------
-# Paths
+# File paths
 # ---------------------------------------------------------------------------
 _DIR = os.path.dirname(os.path.abspath(__file__))
 _DEMO_HTML = os.path.join(_DIR, "demo.html")
 if not os.path.isfile(_DEMO_HTML):
     _DEMO_HTML = os.path.join(_DIR, "m6_dashboard.html")
 
+
 # ---------------------------------------------------------------------------
-# Parent FastAPI app  ← routes live here; Gradio mounts under /gradio
+# Endpoint functions (plain async functions — added via add_api_route later)
 # ---------------------------------------------------------------------------
-app = FastAPI(title="DepthWizard API")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/health")
-@app.post("/health")
-def health():
+def health_check():
     return {"status": "online", "service": "DepthWizard Engine"}
 
 
-@app.get("/demo.html", response_class=HTMLResponse)
-@app.get("/demo", response_class=HTMLResponse)
 def serve_demo():
     with open(_DEMO_HTML, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+        return HTMLResponse(content=f.read(), headers={"Cache-Control": "no-cache"})
 
 
-@app.get("/export/{session_id}")
 def download_export(session_id: str):
     if session_id not in EXPORT_CACHE:
         raise HTTPException(status_code=404, detail="Export session not found.")
@@ -189,8 +179,6 @@ def download_export(session_id: str):
     return FileResponse(path=item["path"], filename=item["filename"], media_type="application/octet-stream")
 
 
-@app.post("/process")
-@app.post("/api/process")
 async def process_image_endpoint(
     file: UploadFile = File(...),
     gcps: Optional[str] = Form(None),
@@ -247,9 +235,9 @@ async def process_image_endpoint(
         c_sub = downsample_array(result["confidence_map"], v_size)
 
         rgb_b64   = encode_rgb_to_base64_jpeg(result["rgb"], v_size)
-        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"],  "turbo",  v_size)
-        dsm_b64   = encode_colormap_to_base64_jpeg(result["height_map"], "turbo",  v_size)
-        slope_b64 = encode_colormap_to_base64_jpeg(result["slope_map"],  "magma",  v_size, vmin=0.0, vmax=45.0)
+        depth_b64 = encode_colormap_to_base64_jpeg(result["depth_map"],      "turbo",   v_size)
+        dsm_b64   = encode_colormap_to_base64_jpeg(result["height_map"],     "turbo",   v_size)
+        slope_b64 = encode_colormap_to_base64_jpeg(result["slope_map"],      "magma",   v_size, vmin=0.0, vmax=45.0)
         conf_b64  = encode_colormap_to_base64_jpeg(result["confidence_map"], "viridis", v_size, vmin=0.0, vmax=1.0)
 
         error_b64 = val_metrics = None
@@ -269,10 +257,10 @@ async def process_image_endpoint(
             f = arr[np.isfinite(arr)]
             return float(fn(f)) if len(f) > 0 else default
 
-        h_min = _stat(result["height_map"], np.min, 0.0)
-        h_max = _stat(result["height_map"], np.max, 1.0)
-        s_min = _stat(result["slope_map"],  np.min, 0.0)
-        s_max = _stat(result["slope_map"],  np.max, 90.0)
+        h_min  = _stat(result["height_map"], np.min, 0.0)
+        h_max  = _stat(result["height_map"], np.max, 1.0)
+        s_min  = _stat(result["slope_map"],  np.min, 0.0)
+        s_max  = _stat(result["slope_map"],  np.max, 90.0)
         c_mean = _stat(result["confidence_map"], np.mean, 1.0)
 
         calibrated    = bool(result.get("calibrated", False))
@@ -282,7 +270,7 @@ async def process_image_endpoint(
 
         mid_y = v_size // 2
         profile_pts = [
-            {"x": x, "elevation": None if np.isnan(float(h_sub[mid_y, x])) else float(h_sub[mid_y, x])}
+            {"x": x, "elevation": (None if np.isnan(float(h_sub[mid_y, x])) else float(h_sub[mid_y, x]))}
             for x in range(v_size)
         ]
 
@@ -311,8 +299,7 @@ async def process_image_endpoint(
             "confidence_preview": conf_b64, "error_preview": error_b64,
             "validation": val_metrics,
             "slope_map": s_list, "confidence_map": c_list,
-            "slope_min": s_min, "slope_max": s_max,
-            "confidence_mean": c_mean,
+            "slope_min": s_min, "slope_max": s_max, "confidence_mean": c_mean,
             "elevation_profile": profile_pts,
             "crs": str(result["crs"]) if result["crs"] is not None else None,
             "export_url": f"/export/{session_id}",
@@ -335,8 +322,7 @@ async def process_image_endpoint(
 
 
 # ---------------------------------------------------------------------------
-# Gradio Blocks — mounted at /gradio, but the Gradio UI iframe at root
-# points to /demo.html served by FastAPI above.
+# Gradio Blocks — ZeroGPU requires demo.launch()
 # ---------------------------------------------------------------------------
 
 custom_css = """
@@ -351,11 +337,10 @@ with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fi
     _hidden_in  = gr.Textbox(visible=False)
     _hidden_out = gr.Textbox(visible=False)
     _hidden_btn = gr.Button(value="process", visible=False)
+    # Wiring @spaces.GPU function into the Gradio event graph — required for ZeroGPU
     _hidden_btn.click(fn=predict_gpu, inputs=[_hidden_in], outputs=[_hidden_out])
 
-    # The iframe loads from the FastAPI /demo.html route on the SAME origin.
-    # window.location.origin inside the iframe = https://mehersoni-depthwizard.hf.space
-    # fetch('/process') therefore goes to our FastAPI @app.post("/process") above.
+    # /demo.html is served by our custom route inserted below
     gr.HTML("""
         <div id="dw-wrap">
             <iframe src="/demo.html"
@@ -365,21 +350,53 @@ with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fi
         </div>
     """)
 
-# Mount Gradio onto the parent FastAPI app.
-# FastAPI evaluates routes in insertion order — our /process, /demo.html, etc.
-# were inserted BEFORE this mount, so they always win.
-app = gr.mount_gradio_app(app, demo, path="/gradio")
 
-# Also serve the Gradio UI at root "/" by redirecting there
-from fastapi.responses import RedirectResponse
-
-@app.get("/")
-def root():
-    # Serve the dashboard directly
-    with open(_DEMO_HTML, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
-
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     get_model()
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+
+    # Launch with prevent_thread_lock=True so main thread continues.
+    # This starts uvicorn in a background thread AND sets demo.server_app
+    # to the actual FastAPI instance that's being served.
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        prevent_thread_lock=True,
+        show_api=False,
+        ssr_mode=False
+    )
+
+    # demo.server_app is the real served FastAPI app — NOT demo.app (which is
+    # a separate pre-launch instance that gets replaced by launch()).
+    # Insert our routes at index 0, BEFORE Gradio's catch-all route, so they
+    # are matched first by Starlette's order-dependent router.
+    server_app = demo.server_app
+    print(f"[DepthWizard] Injecting custom routes into server_app: {type(server_app)}", flush=True)
+
+    # Build our route objects
+    custom_routes = [
+        APIRoute("/health",               health_check,             methods=["GET", "POST"]),
+        APIRoute("/demo.html",            serve_demo,               methods=["GET"]),
+        APIRoute("/demo",                 serve_demo,               methods=["GET"]),
+        APIRoute("/export/{session_id}",  download_export,          methods=["GET"]),
+        APIRoute("/api/process",          process_image_endpoint,   methods=["POST"]),
+        APIRoute("/process",              process_image_endpoint,   methods=["POST"]),
+    ]
+
+    # Insert in reverse order so /process ends up at index 0
+    for route in reversed(custom_routes):
+        server_app.router.routes.insert(0, route)
+
+    # Rebuild the routing table so the new routes are included
+    server_app.router.on_startup = server_app.router.on_startup  # no-op touch
+    # Force Starlette to rebuild its compiled middleware/route stack on next request
+    if hasattr(server_app, 'middleware_stack'):
+        server_app.middleware_stack = None
+
+    print("[DepthWizard] Custom routes injected. /process is at index 0.", flush=True)
+
+    # Block main thread forever — the server runs in the background thread
+    threading.Event().wait()
