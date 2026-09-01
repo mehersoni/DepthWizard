@@ -162,8 +162,8 @@ with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fi
 
     gr.HTML(
         f"""
-        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
-            <iframe srcdoc="{custom_ui_html.replace('"', '&quot;')}" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
+        <div id="depthwizard-direct-mount" style="width:100%; min-height:100vh; background:#08080a;">
+            {custom_ui_html}
         </div>
         """
     )
