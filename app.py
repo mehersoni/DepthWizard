@@ -23,19 +23,10 @@ import uvicorn
 from process_image import process_image, export_dsm, export_slope
 from depth.depth_model import load_model
 
-@spaces.GPU
-def _gpu_worker_init():
-    """Satisfy Hugging Face ZeroGPU startup detector."""
-    return True
-
-# -----------------------------------------------------------------------------
-# Global State & Model Preload
-# -----------------------------------------------------------------------------
 GLOBAL_MODEL = None
 GLOBAL_PROCESSOR = None
 GLOBAL_DEVICE = None
 EXPORT_CACHE: Dict[str, Dict[str, Any]] = {}
-
 
 def get_model():
     global GLOBAL_MODEL, GLOBAL_PROCESSOR, GLOBAL_DEVICE
@@ -44,6 +35,33 @@ def get_model():
         GLOBAL_MODEL, GLOBAL_PROCESSOR, GLOBAL_DEVICE = load_model()
         print(f"[API Server] Model ready on device: {GLOBAL_DEVICE}", flush=True)
     return GLOBAL_MODEL, GLOBAL_PROCESSOR, GLOBAL_DEVICE
+
+@spaces.GPU
+def run_depth_inference(
+    path: str,
+    gcps: Optional[list] = None,
+    dem_path: Optional[str] = None,
+    use_shadows: bool = True,
+    a_prior: Optional[float] = None,
+    lambda_prior: float = 0.0,
+    terrain_percentile: float = 25.0,
+    calibration_method: str = "linear"
+) -> Dict[str, Any]:
+    """Execute ML inference inside ZeroGPU isolated worker."""
+    model, processor, device = get_model()
+    return process_image(
+        path=path,
+        gcps=gcps,
+        dem_path=dem_path,
+        use_shadows=use_shadows,
+        model=model,
+        processor=processor,
+        device=device,
+        a_prior=a_prior,
+        lambda_prior=lambda_prior,
+        terrain_percentile=terrain_percentile,
+        calibration_method=calibration_method
+    )
 
 
 def sanitize_for_json(obj: Any) -> Any:
@@ -118,9 +136,6 @@ def encode_colormap_to_base64_jpeg(
     return f"data:image/jpeg;base64,{b64_str}"
 
 
-# -----------------------------------------------------------------------------
-# Gradio Blocks Definition
-# -----------------------------------------------------------------------------
 html_dashboard_path = os.path.join(os.path.dirname(__file__), "demo.html")
 if not os.path.isfile(html_dashboard_path):
     html_dashboard_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
@@ -133,15 +148,6 @@ body, html { margin: 0; padding: 0; min-height: 100vh; background: #08080a; }
 .gradio-container { max-width: 100% !important; margin: 0 !important; padding: 0 !important; min-height: 100vh !important; background: #08080a; }
 #custom-iframe-wrap, #custom-iframe-wrap iframe { width: 100% !important; min-height: 100vh !important; height: 100vh !important; border: none; }
 """
-
-with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo_blocks:
-    gr.HTML(
-        f"""
-        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
-            <iframe src="/demo.html" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
-        </div>
-        """
-    )
 
 
 # -----------------------------------------------------------------------------
@@ -237,14 +243,11 @@ async def process_image_endpoint(
 
     try:
         result = await run_in_threadpool(
-            process_image,
+            run_depth_inference,
             path=temp_path,
             gcps=parsed_gcps,
             dem_path=temp_dem_path,
             use_shadows=use_shadows,
-            model=model,
-            processor=processor,
-            device=device,
             a_prior=a_prior,
             lambda_prior=lambda_prior,
             terrain_percentile=terrain_percentile,
@@ -369,12 +372,24 @@ async def process_image_endpoint(
             pass
 
 
-# Mount Gradio app into FastAPI
-app = gr.mount_gradio_app(app, demo_blocks, path="/gradio")
+with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
+    gr.HTML(
+        f"""
+        <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
+            <iframe src="/demo.html" style="width:100%; min-height:100vh; height:100%; border:none; display:block;"></iframe>
+        </div>
+        """
+    )
 
-# Also serve Gradio on root fallback / if demo.html is directly mounted on /demo.html
-@app.get("/", response_class=HTMLResponse)
-def serve_root():
+
+# Mount all FastAPI routes into Gradio's internal FastAPI app
+demo.app.include_router(app.router)
+
+# Also ensure /demo.html and / serve the custom Three.js interface
+@demo.app.get("/", response_class=HTMLResponse)
+@demo.app.get("/demo.html", response_class=HTMLResponse)
+@demo.app.get("/demo", response_class=HTMLResponse)
+def serve_root_demo():
     html_path = os.path.join(os.path.dirname(__file__), "demo.html")
     if not os.path.isfile(html_path):
         html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
@@ -383,4 +398,8 @@ def serve_root():
 
 if __name__ == "__main__":
     get_model()
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        ssr_mode=False
+    )
