@@ -1238,15 +1238,13 @@
     }, delay);
 
     try {
-      // The iframe is served from /demo.html on the Space's own origin.
-      // window.location.origin is always https://mehersoni-depthwizard.hf.space here.
-      var baseUrl = window.location.origin;
+      // demo.html is served directly by FastAPI at the Space origin.
+      // /process is also on the same FastAPI app, so a relative path always works.
+      var resp = await fetch('/process', { method: 'POST', body: formData });
 
-      var resp = await fetch(baseUrl + '/process', { method: 'POST', body: formData });
-
-      // If primary fails, try /api/process once
+      // Fallback to /api/process if needed
       if (!resp || resp.status === 404) {
-        try { resp = await fetch(baseUrl + '/api/process', { method: 'POST', body: formData }); } catch(e2){}
+        try { resp = await fetch('/api/process', { method: 'POST', body: formData }); } catch(e2){}
       }
 
       clearInterval(iv);
