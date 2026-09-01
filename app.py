@@ -162,7 +162,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo_blocks:
+@spaces.GPU
+def predict_gpu(image_path: str) -> str:
+    """ZeroGPU entrypoint."""
+    return image_path
+
+with gr.Blocks(title="DepthWizard — 3D Elevation Platform", css=custom_css, fill_height=True) as demo:
+    _hidden_in = gr.Textbox(visible=False)
+    _hidden_out = gr.Textbox(visible=False)
+    _hidden_btn = gr.Button(value="process", visible=False)
+    _hidden_btn.click(fn=predict_gpu, inputs=[_hidden_in], outputs=[_hidden_out])
+
     gr.HTML(
         f"""
         <div id="custom-iframe-wrap" style="width:100%; height:100vh; overflow:auto;">
@@ -383,12 +393,14 @@ async def process_image_endpoint(
             pass
 
 
-# Mount Gradio Blocks into FastAPI app
-app = gr.mount_gradio_app(app, demo_blocks, path="/gradio")
+# Mount all FastAPI routes onto Gradio's internal FastAPI app
+demo.app.include_router(app.router)
 
-# Make root / serve the 3D console directly
-@app.get("/", response_class=HTMLResponse)
-def serve_root():
+# Also ensure /demo.html and / serve the custom Three.js interface
+@demo.app.get("/", response_class=HTMLResponse)
+@demo.app.get("/demo.html", response_class=HTMLResponse)
+@demo.app.get("/demo", response_class=HTMLResponse)
+def serve_root_demo():
     html_path = os.path.join(os.path.dirname(__file__), "demo.html")
     if not os.path.isfile(html_path):
         html_path = os.path.join(os.path.dirname(__file__), "m6_dashboard.html")
@@ -397,4 +409,9 @@ def serve_root():
 
 if __name__ == "__main__":
     get_model()
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    demo.queue().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        show_api=False,
+        ssr_mode=False
+    )
