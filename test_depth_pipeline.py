@@ -56,7 +56,7 @@ def run_depth_pipeline():
     tile_predictions = {}
     
     # 25% overlap on a 1024 tile
-    for crop, box in generate_overlapping_tiles(image, tile_size=1024, overlap_ratio=0.25):
+    for crop, box in generate_overlapping_tiles(image, tile_size=512, overlap_ratio=0.25):
         # Explicitly call our 2-view TTA mode
         inference_result = estimator.predict_with_confidence(crop, tta_mode="2-view")
         
