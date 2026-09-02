@@ -4,12 +4,35 @@ import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from PIL import Image, UnidentifiedImageError
 
-try:
-    # pyrefly: ignore [missing-import]
-    import rasterio
-except ImportError:
-    rasterio = None
-    logging.warning("[M1 PREPROCESS] rasterio not installed. GeoTIFF metadata extraction disabled.")
+import rasterio
+from rasterio.warp import reproject, Resampling
+
+def load_aligned_dsm(rgb_path, dsm_path):
+    """
+    Geospatially aligns a DSM to an RGB reference image.
+    Ensures identical CRS, bounding box, and pixel dimensions.
+    """
+    with rasterio.open(rgb_path) as src_rgb:
+        rgb_transform = src_rgb.transform
+        rgb_crs = src_rgb.crs
+        h, w = src_rgb.height, src_rgb.width
+        
+    with rasterio.open(dsm_path) as src_dsm:
+        # Create an empty array perfectly matching the RGB dimensions
+        aligned_dsm = np.zeros((h, w), dtype=np.float32)
+        
+        # Reproject using actual geographic metadata, not just array stretching
+        reproject(
+            source=rasterio.band(src_dsm, 1),
+            destination=aligned_dsm,
+            src_transform=src_dsm.transform,
+            src_crs=src_dsm.crs,
+            dst_transform=rgb_transform,
+            dst_crs=rgb_crs,
+            resampling=Resampling.nearest # Nearest neighbor prevents interpolating fake elevations
+        )
+        
+    return aligned_dsm
 
 def load_and_validate_image(image_path: str) -> Optional[Tuple[Image.Image, Dict[str, Any]]]:
     if not os.path.exists(image_path):

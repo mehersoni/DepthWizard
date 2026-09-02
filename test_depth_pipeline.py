@@ -56,14 +56,28 @@ def run_depth_pipeline():
     tile_predictions = {}
     
     # 25% overlap on a 1024 tile
-    for crop, box in generate_overlapping_tiles(image, tile_size=128, overlap_ratio=0.25):
+    for crop, box in generate_overlapping_tiles(image, tile_size=1024, overlap_ratio=0.25):
         # Explicitly call our 2-view TTA mode
         inference_result = estimator.predict_with_confidence(crop, tta_mode="2-view")
         
         if inference_result is not None:
+            depth_crop = inference_result["relative_depth"]
+            
+            # ---------------------------------------------------------
+            # STRICT SHAPE VALIDATION (The Sanity Check)
+            # ---------------------------------------------------------
+            expected_shape = (crop.height, crop.width)
+            actual_shape = depth_crop.shape
+            
+            if actual_shape != expected_shape:
+                print(f"[!] CRITICAL ALIGNMENT ERROR: Tile input is {expected_shape}, but M1 returned {actual_shape}.")
+                print("    Stitching math will fail. Models.py requires forced interpolation.")
+                sys.exit(1)
+            # ---------------------------------------------------------
+
             # Unpack the new dictionary payload
             tile_predictions[box] = {
-                "depth": inference_result["relative_depth"],
+                "depth": depth_crop,
                 "height": inference_result["relative_height"],
                 "confidence": inference_result["quality_map"]
             }
@@ -87,7 +101,6 @@ def run_depth_pipeline():
         height_array[y1:y2, x1:x2] = data["height"]
         confidence_array[y1:y2, x1:x2] = data["confidence"]
 
-    # 4. Export Assets
     # 4. Export Assets
     print("\n[Stage 4] Exporting mathematical arrays and bridging assets...")
     

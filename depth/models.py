@@ -87,16 +87,19 @@ class DepthEstimator:
             # ---------------------------------------------------------
             # Calculate Terrain Bias B(D) using Morphological Opening
             # ---------------------------------------------------------
-            # A 55x55 kernel is large enough to "erase" building peaks 
-            # while preserving the underlying slowly-varying terrain slopes.
-            kernel_size = 55
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+            # Calculate kernel size based on physical scale, not raw pixels
+            gsd_meters_per_pixel = 1.0  # Default fallback, should be passed in from metadata
+            max_building_width_meters = 60.0 # Assumes largest target building is 60m wide
             
-            # B(D): The smoothed terrain (hills/valleys without buildings)
+            calculated_size = int(max_building_width_meters / gsd_meters_per_pixel)
+            
+            # OpenCV kernels must be odd numbers
+            kernel_size = calculated_size if calculated_size % 2 != 0 else calculated_size + 1
+            kernel_size = max(3, kernel_size) # Ensure it doesn't collapse to 0
+            
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
             terrain_bias = cv2.morphologyEx(final_depth, cv2.MORPH_OPEN, kernel)
             
-            # H_rel = D - B(D): Isolate just the buildings
-            # We use np.maximum to prevent negative values from float math artifacts
             height_map = np.maximum(final_depth - terrain_bias, 0.0)
             # ---------------------------------------------------------
             # Calculate latency in milliseconds

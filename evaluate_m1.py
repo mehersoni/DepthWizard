@@ -112,9 +112,9 @@ def evaluate_model(image_path: str, gt_dsm_path: str, model_size: str, num_calib
     print(f"Pairwise Ordering Accuracy: {pairwise_acc}%")
     
     # 7. Calculate Metrics
-    pearson_corr, _ = pearsonr(pred_flat.flatten(), gt_flat.flatten())
-    spearman_corr, _ = spearmanr(pred_flat.flatten(), gt_flat.flatten())
-    
+    pearson_corr, _ = pearsonr(pred_eval.flatten(), gt_eval.flatten())
+    spearman_corr, _ = spearmanr(pred_eval.flatten(), gt_eval.flatten())
+
     mae = mean_absolute_error(gt_eval, pred_calibrated_eval)
     rmse = np.sqrt(mean_squared_error(gt_eval, pred_calibrated_eval))
 
