@@ -15,6 +15,38 @@ import cv2
 from depth.preprocess import load_and_validate_image
 from depth.models import DepthEstimator
 
+import numpy as np
+
+def calculate_pairwise_accuracy(gt_array, pred_array, num_samples=10000):
+    """
+    Calculates P(order correct) for randomly sampled pixel pairs.
+    Proves whether the model's structural height ordering is intact.
+    """
+    valid_mask = np.isfinite(gt_array) & (gt_array > -999)
+    gt_flat = gt_array[valid_mask]
+    pred_flat = pred_array[valid_mask]
+    
+    if len(gt_flat) < 2:
+        return 0.0
+        
+    idx_A = np.random.randint(0, len(gt_flat), num_samples)
+    idx_B = np.random.randint(0, len(gt_flat), num_samples)
+    
+    gt_A, gt_B = gt_flat[idx_A], gt_flat[idx_B]
+    pred_A, pred_B = pred_flat[idx_A], pred_flat[idx_B]
+    
+    valid_pairs = gt_A != gt_B
+    if not np.any(valid_pairs):
+        return 0.0
+        
+    gt_order = gt_A[valid_pairs] > gt_B[valid_pairs]
+    pred_order = pred_A[valid_pairs] > pred_B[valid_pairs]
+    
+    correct_matches = np.sum(gt_order == pred_order)
+    total_valid_pairs = np.sum(valid_pairs)
+    
+    return round((correct_matches / total_valid_pairs) * 100, 2)
+
 def evaluate_model(image_path: str, gt_dsm_path: str, model_size: str, num_calib_points: int = 100):
     # 1. Load Data
     result = load_and_validate_image(image_path)
@@ -69,10 +101,15 @@ def evaluate_model(image_path: str, gt_dsm_path: str, model_size: str, num_calib
     # 5. Fit RANSAC Calibration ONLY on the calibration points
     ransac = RANSACRegressor(random_state=42)
     ransac.fit(pred_flat[calib_idx], gt_flat[calib_idx])
-    
+
     # 6. Apply Calibration to the held-out evaluation points
-    pred_calibrated_eval = ransac.predict(pred_flat[eval_idx])
     gt_eval = gt_flat[eval_idx]
+    pred_eval = pred_flat[eval_idx]
+    pred_calibrated_eval = ransac.predict(pred_eval)
+
+    # Inside your evaluation loop/output
+    pairwise_acc = calculate_pairwise_accuracy(gt_eval, pred_eval)
+    print(f"Pairwise Ordering Accuracy: {pairwise_acc}%")
     
     # 7. Calculate Metrics
     pearson_corr, _ = pearsonr(pred_flat.flatten(), gt_flat.flatten())
@@ -80,6 +117,8 @@ def evaluate_model(image_path: str, gt_dsm_path: str, model_size: str, num_calib
     
     mae = mean_absolute_error(gt_eval, pred_calibrated_eval)
     rmse = np.sqrt(mean_squared_error(gt_eval, pred_calibrated_eval))
+
+    
     
     return {
         "Model Tier": model_size,
