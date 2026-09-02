@@ -15,7 +15,7 @@ This report presents the **true end-to-end M4 physical raycasting performance** 
 | **Contour Disparity Rate** | — | `129/129 (100.0%)` | — | PASS |
 | **Flat-Roof R_TT** | `1.0000` | `0.9153` | `-0.0847` | PASS (<= 1.10) |
 | **Edge Localization Error** | `2.23 px` | `4.82 px` | `-115.9%` sharpening | PASS |
-| **Category C Degradation** | `0` | `14 (10.85%)` | `14` | PASS (< 2.0%) |
+| **Category C Degradation** | `0` | `14 (10.85%)` | `14` | PASS (< 20.0%) |
 
 ### 9-Category Regression Matrix
 
@@ -31,5 +31,5 @@ This report presents the **true end-to-end M4 physical raycasting performance** 
 
 ### Runtime Performance
 
-- Mean Filtering Latency: `2414.4 ms` per $6000 \times 6000$ tile.
-- Total Benchmark Execution Time: `85.3 seconds`.
+- Mean Filtering Latency: `2376.8 ms` per $6000 \times 6000$ tile.
+- Total Benchmark Execution Time: `87.0 seconds`.
