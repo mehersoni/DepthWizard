@@ -148,3 +148,7 @@ def estimate_depth_tiled(
     }
 
     return final_depth, info
+
+
+# Alias for backwards compatibility
+run_tiled_inference = estimate_depth_tiled

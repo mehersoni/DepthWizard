@@ -4,7 +4,7 @@ Provides depth estimation models, tiled inference, preprocessing, and export uti
 """
 
 from .depth_model import estimate_depth, load_model, get_device
-from .tiled_inference import run_tiled_inference
+from .tiled_inference import estimate_depth_tiled, run_tiled_inference
 
 try:
     from .models import DepthEstimator
@@ -19,6 +19,7 @@ __all__ = [
     "estimate_depth",
     "load_model",
     "get_device",
+    "estimate_depth_tiled",
     "run_tiled_inference",
     "DepthEstimator",
     "load_and_validate_image",
