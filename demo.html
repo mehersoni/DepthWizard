@@ -653,28 +653,34 @@
   let webglCanvas = null;
 
   function fitCanvas(canvas){
+    if(!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width*dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height*dpr));
+    const parentRect = canvas.parentElement ? canvas.parentElement.getBoundingClientRect() : null;
+    const w = rect.width > 20 ? rect.width : (parentRect && parentRect.width > 20 ? parentRect.width : (canvas.clientWidth || 640));
+    const h = rect.height > 20 ? rect.height : (parentRect && parentRect.height > 20 ? parentRect.height : (canvas.clientHeight || 400));
+    canvas.width = Math.max(64, Math.floor(w * dpr));
+    canvas.height = Math.max(64, Math.floor(h * dpr));
     return canvas.getContext('2d');
   }
 
   function drawBase64ToCanvas(canvas, b64url, fitMode){
+    if(!canvas) return Promise.resolve();
     fitMode = fitMode || 'contain';
     return new Promise(resolve => {
       if(!b64url){ resolve(); return; }
       const img = new Image();
       img.onload = function(){
         const ctx = fitCanvas(canvas);
+        if(!ctx){ resolve(); return; }
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const cw = canvas.width;
         const ch = canvas.height;
-        const iw = img.naturalWidth || img.width;
-        const ih = img.naturalHeight || img.height;
+        const iw = img.naturalWidth || img.width || cw;
+        const ih = img.naturalHeight || img.height || ch;
 
         if(fitMode === 'contain'){
           const scale = Math.min(cw / iw, ch / ih);
@@ -688,10 +694,14 @@
         }
         resolve();
       };
-      img.onerror = function(){ resolve(); };
+      img.onerror = function(err){
+        console.warn('Failed to load image for canvas:', err);
+        resolve();
+      };
       img.src = b64url;
     });
   }
+
 
   function formatBytes(bytes){
     if(bytes < 1024) return bytes + ' B';
@@ -787,11 +797,19 @@
       document.getElementById('modeGeoOpt').classList.remove('active');
     }
 
+    // Switch view to overview so the preview is immediately active
+    currentTab = 'overview';
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab === 'overview'); });
+    document.getElementById('viewLabel').textContent = 'INPUT PREVIEW: ' + file.name.toUpperCase();
+    if(webglCanvas) webglCanvas.style.display = 'none';
+    mainCanvas.style.display = 'block';
+
     // Load preview image onto thumbnail and main canvas
-    if(file.type.startsWith('image/') || label === 'PNG' || label === 'JPEG'){
+    if(label !== 'GeoTIFF' && !file.name.toLowerCase().endsWith('.tif') && !file.name.toLowerCase().endsWith('.tiff')){
       const reader = new FileReader();
       reader.onload = function(e){
         const dataUrl = e.target.result;
+        currentImages.rgb = dataUrl;
         let thumb = document.getElementById('fileThumb');
         if(!thumb){
           thumb = document.createElement('img');
@@ -800,12 +818,25 @@
           fileCard.insertBefore(thumb, badge.nextSibling);
         }
         thumb.src = dataUrl;
+        thumb.style.display = 'block';
         drawBase64ToCanvas(mainCanvas, dataUrl, 'contain');
-        document.getElementById('viewLabel').textContent = 'UPLOADED IMAGE (READY)';
       };
       reader.readAsDataURL(file);
+    } else {
+      var ctx = fitCanvas(mainCanvas);
+      if(ctx){
+        ctx.fillStyle = '#101012';
+        ctx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('GeoTIFF Raster Loaded: ' + file.name, 24, mainCanvas.height / 2 - 10);
+        ctx.fillStyle = '#93938f';
+        ctx.font = '13px monospace';
+        ctx.fillText('Click "Process Image" to decode raster and generate 3D elevation', 24, mainCanvas.height / 2 + 18);
+      }
     }
   }
+
 
 
   document.getElementById('modeGeoOpt').addEventListener('click', function(){
