@@ -28,6 +28,8 @@ from rasterio.transform import Affine
 from rasterio.warp import reproject, Resampling
 
 from depth.depth_model import estimate_depth, load_model
+from depth.tiled_inference import estimate_depth_tiled
+from calibration.rdsm import make_rdsm
 from shadow_detection import compute_shadow_confidence
 from calibration.metric import (
     fit_scale_offset, apply_scale_offset,
@@ -38,6 +40,13 @@ from calibration.metric import (
 from calibration.gcp_calibration import (
     fit_gcp_calibration_nonlinear, apply_gcp_calibration_nonlinear
 )
+
+# Integration hook for M7 Guided Filter Module
+try:
+    from shadow.guided_filter import refine_depth_anything_map
+    HAS_GUIDED_FILTER = True
+except Exception:
+    HAS_GUIDED_FILTER = False
 
 # Integration hook for M4 Shadow-Cue Module
 import sys
@@ -50,6 +59,7 @@ try:
     HAS_M4_SHADOW = True
 except Exception:
     HAS_M4_SHADOW = False
+
 
 
 def calculate_slope(
@@ -391,6 +401,7 @@ def process_image(
     dem_path: Optional[str] = None,
     dem_file: Optional[str] = None,
     use_shadows: bool = True,
+    use_guided_filter: bool = True,
     model=None,
     processor=None,
     device=None,
@@ -500,28 +511,57 @@ def process_image(
     h, w, c = rgb.shape
 
     # [2/5] Monocular Depth Inference / External Depth Hook
+    tiled_inference_used = False
     if external_depth is not None and isinstance(external_depth, np.ndarray):
         depth = external_depth.astype(np.float32)
         if depth.shape != (h, w):
             depth_img = Image.fromarray(depth).resize((w, h), Image.Resampling.BILINEAR)
             depth = np.array(depth_img, dtype=np.float32)
     else:
-        if model is None:
-            model, processor, device = load_model()
-        depth = estimate_depth(rgb, model=model, processor=processor, device=device)
+        # Use tiled inference for high-res inputs (>768px in either dimension)
+        if max(h, w) > 768:
+            try:
+                depth, _ = estimate_depth_tiled(rgb, tile_size=512, overlap=0.25, device=device)
+                tiled_inference_used = True
+            except Exception:
+                if model is None:
+                    model, processor, device = load_model()
+                depth = estimate_depth(rgb, model=model, processor=processor, device=device)
+        else:
+            if model is None:
+                model, processor, device = load_model()
+            depth = estimate_depth(rgb, model=model, processor=processor, device=device)
 
-    # Robust percentile-based dynamic range normalization to prevent outliers from flattening relief
-    d_valid = depth[np.isfinite(depth)]
-    if len(d_valid) > 0:
-        d_p01 = float(np.percentile(d_valid, 0.5))
-        d_p99 = float(np.percentile(d_valid, 99.5))
-        d_span = (d_p99 - d_p01) if (d_p99 - d_p01) > 1e-6 else 1.0
-        rdsm = np.clip((depth - d_p01) / d_span, 0.0, 1.0).astype(np.float32)
-        d_min = d_p01
-        d_max = d_p99
-    else:
-        d_min, d_max, d_span = 0.0, 1.0, 1.0
-        rdsm = np.zeros_like(depth, dtype=np.float32)
+    # Robust percentile-based dynamic range normalization via calibration.rdsm
+    try:
+        rdsm = make_rdsm(depth, p_low=0.5, p_high=99.5)
+        d_valid = depth[np.isfinite(depth)]
+        d_min = float(np.percentile(d_valid, 0.5)) if len(d_valid) > 0 else 0.0
+        d_max = float(np.percentile(d_valid, 99.5)) if len(d_valid) > 0 else 1.0
+        d_span = (d_max - d_min) if (d_max - d_min) > 1e-6 else 1.0
+    except Exception:
+        d_valid = depth[np.isfinite(depth)]
+        if len(d_valid) > 0:
+            d_p01 = float(np.percentile(d_valid, 0.5))
+            d_p99 = float(np.percentile(d_valid, 99.5))
+            d_span = (d_p99 - d_p01) if (d_p99 - d_p01) > 1e-6 else 1.0
+            rdsm = np.clip((depth - d_p01) / d_span, 0.0, 1.0).astype(np.float32)
+            d_min = d_p01
+            d_max = d_p99
+        else:
+            d_min, d_max, d_span = 0.0, 1.0, 1.0
+            rdsm = np.zeros_like(depth, dtype=np.float32)
+
+    # M7 Guided Filter edge-preserving refinement
+    guided_filter_applied = False
+    if use_guided_filter and HAS_GUIDED_FILTER:
+        try:
+            rdsm_refined = refine_depth_anything_map(guide_image=rgb, raw_depth=rdsm, radius=16, eps=0.01)
+            rdsm = np.clip(rdsm_refined, 0.0, 1.0).astype(np.float32)
+            guided_filter_applied = True
+        except Exception as gf_err:
+            print(f"[M7 Guided Filter Warning] {gf_err}")
+
 
     # [3/5] Calibration: Relative vs Absolute Mode
     scale_a = None
@@ -805,6 +845,8 @@ def process_image(
         "crs": str(crs) if crs is not None else None,
         "gsd_x": float(gsd_x) if gsd_x is not None else None,
         "gsd_y": float(gsd_y) if gsd_y is not None else None,
+        "guided_filter_applied": bool(guided_filter_applied),
+        "tiled_inference_used": bool(tiled_inference_used),
         "error_type": error_type,
         "raw_depth_stats": {
             "min": float(d_min),
@@ -812,6 +854,7 @@ def process_image(
             "span": float(d_span)
         }
     }
+
 
     return {
         "height_map": height_map.astype(np.float32),
