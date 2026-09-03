@@ -265,9 +265,37 @@
     background:var(--fg);color:var(--bg);border:none;border-radius:8px;
     padding:12px;font-size:13px;font-weight:600;
     display:flex;align-items:center;justify-content:center;gap:8px;
+    transition:all .2s ease;
   }
   .process-btn:disabled{opacity:0.4;cursor:not-allowed;}
   .process-btn svg{width:12px;height:12px;}
+  .process-btn.ready{
+    background:#22c55e !important;color:#052e16 !important;font-weight:700 !important;
+    box-shadow:0 0 20px rgba(34,197,94,0.45);
+    animation:pulseReady 2s infinite;
+  }
+  @keyframes pulseReady {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+    70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+
+  .dropzone.has-file{
+    border:2px solid #22c55e !important;
+    background:rgba(34,197,94,0.06) !important;
+    box-shadow:0 0 16px rgba(34,197,94,0.2);
+  }
+  .file-preview-thumb{
+    width:100%;height:120px;object-fit:cover;border-radius:6px;
+    margin-bottom:10px;border:1px solid var(--line);display:block;
+  }
+  .upload-badge{
+    display:inline-flex;align-items:center;gap:5px;
+    background:#22c55e;color:#052e16;font-family:var(--mono);
+    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:4px;
+    letter-spacing:0.04em;margin-bottom:8px;
+  }
+
 
   .datasource-row{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:12px;color:var(--fg-dim);}
   .datasource-row svg.ico{width:14px;height:14px;color:var(--fg-dim);flex-shrink:0;}
@@ -592,9 +620,9 @@
       <div style="margin-top:10px;padding:8px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--fg-dim);margin-bottom:6px;">
           <span>Vertical Exaggeration</span>
-          <span id="heightScaleVal" style="font-family:var(--mono);font-weight:600;color:var(--fg);">1.2x</span>
+          <span id="heightScaleVal" style="font-family:var(--mono);font-weight:600;color:var(--fg);">1.0x</span>
         </div>
-        <input type="range" id="heightScaleSlider" min="0.1" max="4.0" step="0.1" value="1.2" style="width:100%;cursor:pointer;accent-color:#38bdf8;">
+        <input type="range" id="heightScaleSlider" min="0.2" max="3.0" step="0.1" value="1.0" style="width:100%;cursor:pointer;accent-color:#38bdf8;">
         <div style="display:flex;gap:4px;margin-top:8px;">
           <button type="button" class="tex-btn active" data-tex="rgb">RGB</button>
           <button type="button" class="tex-btn" data-tex="dsm">DSM</button>
@@ -714,16 +742,39 @@
     fileCard.style.display = 'none';
     selectedFile = null;
     processBtn.disabled = true;
+    processBtn.classList.remove('ready');
+    dropzone.classList.remove('has-file');
+    var thumb = document.getElementById('fileThumb');
+    if(thumb) thumb.remove();
+    var badge = document.getElementById('fileBadge');
+    if(badge) badge.remove();
+    statusText.textContent = 'System Ready';
   });
 
   function loadFile(file){
     selectedFile = file;
+    dropzone.classList.add('has-file');
+    processBtn.disabled = false;
+    processBtn.classList.add('ready');
+    statusText.textContent = '✓ Ready to Process';
+    var dot = document.querySelector('.status .dot');
+    if(dot){ dot.style.background = '#22c55e'; dot.style.boxShadow = '0 0 0 4px rgba(34,197,94,0.3)'; }
+
     document.getElementById('fnameText').textContent = file.name;
     document.getElementById('fsize').textContent = formatBytes(file.size);
     const label = extLabel(file.name);
     document.getElementById('ftype').textContent = label;
     fileCard.style.display = 'block';
-    processBtn.disabled = false;
+
+    let badge = document.getElementById('fileBadge');
+    if(!badge){
+      badge = document.createElement('div');
+      badge.id = 'fileBadge';
+      badge.className = 'upload-badge';
+      badge.innerHTML = '<span>●</span> IMAGE LOADED';
+      fileCard.insertBefore(badge, fileCard.firstChild);
+    }
+
     document.getElementById('fcrs').textContent = 'Pending analysis...';
     document.getElementById('fres').textContent = '—';
     document.getElementById('fdims').textContent = '—';
@@ -735,7 +786,27 @@
       document.getElementById('modeRelOpt').classList.add('active');
       document.getElementById('modeGeoOpt').classList.remove('active');
     }
+
+    // Load preview image onto thumbnail and main canvas
+    if(file.type.startsWith('image/') || label === 'PNG' || label === 'JPEG'){
+      const reader = new FileReader();
+      reader.onload = function(e){
+        const dataUrl = e.target.result;
+        let thumb = document.getElementById('fileThumb');
+        if(!thumb){
+          thumb = document.createElement('img');
+          thumb.id = 'fileThumb';
+          thumb.className = 'file-preview-thumb';
+          fileCard.insertBefore(thumb, badge.nextSibling);
+        }
+        thumb.src = dataUrl;
+        drawBase64ToCanvas(mainCanvas, dataUrl, 'contain');
+        document.getElementById('viewLabel').textContent = 'UPLOADED IMAGE (READY)';
+      };
+      reader.readAsDataURL(file);
+    }
   }
+
 
   document.getElementById('modeGeoOpt').addEventListener('click', function(){
     this.classList.add('active');
@@ -1157,7 +1228,7 @@
   let cachedGridH = 256;
   let skirtMesh = null;
 
-  function buildSkirtGeometry(planeW, planeH, gridW, gridH, heightsNorm, scaleY, bottomY = -0.6){
+  function buildSkirtGeometry(planeW, planeH, gridW, gridH, heightsNorm, scaleY, bottomY = -0.25){
     const geom = new THREE.BufferGeometry();
     const positions = [];
     const indices = [];
@@ -1305,10 +1376,10 @@
       cachedNormH[i] = (v !== null && v !== undefined && isFinite(v)) ? (v - minH) / span : 0.0;
     }
 
-    // Rich 3D vertical relief scale (3.6 units on 22-unit plane)
-    cachedBaseScale = 3.6;
+    // Natural 3D vertical relief scale (1.4 units on 22-unit plane for balanced, non-exaggerated height)
+    cachedBaseScale = 1.4;
     const sliderElem = document.getElementById('heightScaleSlider');
-    const currentExag = parseFloat(sliderElem ? sliderElem.value : '1.2');
+    const currentExag = parseFloat(sliderElem ? sliderElem.value : '1.0');
     const scaleY = cachedBaseScale * currentExag;
 
     for(let i = 0; i < pos.count && i < cachedNormH.length; i++){
@@ -1365,6 +1436,15 @@
     if(threeControls){
       threeControls.reset(planeH);
     }
+
+    // Default to auto-fly in 3D view
+    isFlying = true;
+    const btnFlyElem = document.getElementById('btnFly');
+    if(btnFlyElem){
+      btnFlyElem.style.borderColor = '#22c55e';
+      btnFlyElem.style.background = 'rgba(34, 197, 94, 0.15)';
+      btnFlyElem.style.color = '#22c55e';
+    }
   }
 
   // Height Exaggeration Slider listener
@@ -1390,6 +1470,12 @@
   if(btnOrbit){
     btnOrbit.addEventListener('click', function(){
       isFlying = false;
+      const btnFlyElem = document.getElementById('btnFly');
+      if(btnFlyElem){
+        btnFlyElem.style.borderColor = 'var(--line)';
+        btnFlyElem.style.background = 'var(--panel2)';
+        btnFlyElem.style.color = 'var(--fg-dim)';
+      }
       document.querySelector('.tab[data-tab="3d"]').click();
     });
   }
@@ -1398,9 +1484,12 @@
     btnFly.addEventListener('click', function(){
       document.querySelector('.tab[data-tab="3d"]').click();
       isFlying = !isFlying;
-      btnFly.style.borderColor = isFlying ? '#f4f3ef' : 'var(--line)';
+      btnFly.style.borderColor = isFlying ? '#22c55e' : 'var(--line)';
+      btnFly.style.background = isFlying ? 'rgba(34, 197, 94, 0.15)' : 'var(--panel2)';
+      btnFly.style.color = isFlying ? '#22c55e' : 'var(--fg-dim)';
     });
   }
+
   const btnZoom = document.getElementById('btnZoom');
   if(btnZoom){
     btnZoom.addEventListener('click', function(){
