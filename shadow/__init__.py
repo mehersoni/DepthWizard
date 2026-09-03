@@ -19,6 +19,8 @@ from .run_full_pipeline import run_full_pipeline
 from .guided_filter import (
     GuidedFilterConfig,
     guided_filter_pure_cv2,
+    color_guided_filter_pure_cv2,
+    sharpen_color_edges,
     refine_depth_anything_map
 )
 
@@ -39,6 +41,9 @@ __all__ = [
     "run_full_pipeline",
     "GuidedFilterConfig",
     "guided_filter_pure_cv2",
+    "color_guided_filter_pure_cv2",
+    "sharpen_color_edges",
     "refine_depth_anything_map"
 ]
+
 
