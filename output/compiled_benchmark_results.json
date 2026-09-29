@@ -1,0 +1,74 @@
+{
+  "project": "DepthWizard",
+  "author": "Meher Soni",
+  "institution": "IIT Madras",
+  "benchmark_summary": {
+    "m1_monocular_backbone": {
+      "model": "Depth Anything V2 (ViT-Small)",
+      "dataset": "ISPRS Potsdam (LiDAR DSM Ground Truth)",
+      "pearson_correlation_range": [0.5866, 0.7771],
+      "tiled_inference": {
+        "tile_size": 1024,
+        "overlap": 0.25,
+        "blending_window": "2D Hann Tensor Product",
+        "boundary_artifacts": "None (continuous)"
+      }
+    },
+    "m2_gcp_calibration": {
+      "k_sparsity_study": [
+        {"k": 1, "mae_m": 2.651, "rmse_m": 3.827, "pearson_r": 0.5866, "r2": 0.0065},
+        {"k": 3, "mae_m": 2.908, "rmse_m": 3.985, "pearson_r": 0.5866, "r2": -0.1274},
+        {"k": 5, "mae_m": 2.536, "rmse_m": 3.723, "pearson_r": 0.5866, "r2": 0.0522},
+        {"k": 10, "mae_m": 2.502, "rmse_m": 3.328, "pearson_r": 0.5866, "r2": 0.2492},
+        {"k": 20, "mae_m": 2.441, "rmse_m": 3.204, "pearson_r": 0.5866, "r2": 0.3014},
+        {"k": 50, "mae_m": 2.408, "rmse_m": 3.149, "pearson_r": 0.5866, "r2": 0.3241},
+        {"k": 100, "mae_m": 2.399, "rmse_m": 3.131, "pearson_r": 0.5866, "r2": 0.3318}
+      ],
+      "heldout_spatial_validation": {
+        "train_tiles": ["2_10", "2_11"],
+        "heldout_tile": "2_12",
+        "linear_ols": {
+          "in_sample_mae_m": 2.531,
+          "in_sample_rmse_m": 3.646,
+          "heldout_mae_m": 3.625,
+          "heldout_rmse_m": 3.973,
+          "heldout_pearson_r": 0.7771
+        }
+      }
+    },
+    "m4_shadow_raycast": {
+      "dataset": "ISPRS Potsdam (Full 38 Tiles)",
+      "total_buildings": 1760,
+      "valid_rate_percent": 98.8,
+      "median_absolute_error_m": 3.32,
+      "mean_absolute_error_m": 4.69,
+      "rmse_m": 6.70,
+      "failure_taxonomy": {
+        "valid_trigonometric": 1115,
+        "false_short_shadow": 356,
+        "false_long_shadow": 243,
+        "dark_vegetation_interference": 24,
+        "missing_shadow_contact": 22
+      }
+    },
+    "m7_guided_filter_refinement": {
+      "raw_disparity_mae_m": 3.91,
+      "filtered_disparity_mae_m": 3.75,
+      "raw_disparity_rmse_m": 5.46,
+      "filtered_disparity_rmse_m": 5.21,
+      "mae_delta_m": -0.16,
+      "rmse_delta_m": -0.25,
+      "flat_roof_roughness_ratio": 0.9153,
+      "filtering_latency_ms": 2376.8
+    },
+    "sat2map_refinement": {
+      "terrain_noise_std_reduction_percent": 92.1,
+      "roof_residual_std_reduction_percent": 89.7,
+      "supported_3d_exports": [
+        "GeoTIFF (32-bit Float, CRS Preserved)",
+        "Stanford Binary PLY Point Cloud",
+        "Wavefront OBJ Textured Mesh"
+      ]
+    }
+  }
+}

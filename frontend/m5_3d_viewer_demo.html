@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DepthWizard — M5 3D Terrain Viewer</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #0b0d13; color: #e6e9ef;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  #canvas-holder { width: 100%; height: 100%; position: absolute; left: 0; top: 0; }
+  
+  /* Modern Glassmorphic HUD overlay */
+  #hud {
+    position: absolute; top: 12px; left: 12px; z-index: 10;
+    background: rgba(15, 18, 26, 0.90);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px; padding: 14px 18px; width: 280px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+  }
+  h1 { font-size: 15px; margin: 0 0 2px 0; color: #7cc4ff; letter-spacing: 0.3px; }
+  .subtitle { font-size: 11px; color: #8a99ad; margin-bottom: 12px; }
+  
+  label { font-size: 11.5px; font-weight: 500; color: #9aa4b2; display: block; margin-top: 10px; margin-bottom: 4px; }
+  .upload-box {
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px; padding: 10px; text-align: center;
+    background: rgba(255, 255, 255, 0.02); cursor: pointer; transition: all 0.2s;
+  }
+  .upload-box:hover { border-color: #7cc4ff; background: rgba(124, 196, 255, 0.05); }
+  input[type="file"] { width: 100%; font-size: 11px; color: #cbd5e1; }
+  
+  /* Status Indicator */
+  #status-box {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; padding: 6px 10px; border-radius: 6px;
+    background: rgba(0, 0, 0, 0.3); font-size: 11.5px; color: #cbd5e1;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
+  .status-dot.loading { background: #eab308; animation: pulse 1s infinite; }
+  .status-dot.complete { background: #22c55e; }
+  .status-dot.error { background: #ef4444; }
+  @keyframes pulse { 0% { opacity: 0.3; } 50% { opacity: 1; } 100% { opacity: 0.3; } }
+  
+  /* Info / Inspector Panel */
+  #info {
+    position: absolute; bottom: 14px; left: 14px; z-index: 10;
+    background: rgba(15, 18, 26, 0.90); color: #e6e9ef; padding: 12px 16px;
+    border-radius: 10px; font-size: 12.5px; min-width: 240px;
+    border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  #info .title { font-weight: 600; color: #9aa4b2; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+  #info .val { color: #7cc4ff; font-weight: 600; }
+  #info .desc { font-size: 11px; color: #6b7686; margin-top: 4px; }
+  
+  /* Metadata Panel */
+  #meta-panel {
+    position: absolute; top: 12px; right: 12px; z-index: 10;
+    background: rgba(15, 18, 26, 0.90); color: #e6e9ef; padding: 12px 16px;
+    border-radius: 10px; font-size: 12px; width: 240px;
+    border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(8px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  #meta-panel h2 { font-size: 12px; margin: 0 0 6px 0; color: #ffd27c; text-transform: uppercase; font-weight: 600; }
+  .meta-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .meta-label { color: #8a99ad; }
+  .meta-val { color: #e6e9ef; font-weight: 500; font-family: monospace; }
+  
+  /* Mode Badges */
+  #mode-badge {
+    display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px;
+    font-weight: 600; margin-bottom: 6px;
+  }
+  #mode-badge.startup { background: #374151; color: #9ca3af; border: 1px solid #4b5563; }
+  #mode-badge.absolute { background: #065f46; color: #34d399; border: 1px solid #059669; }
+  #mode-badge.uncalibrated { background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+  #mode-badge.relative { background: #78350f; color: #fde68a; border: 1px solid #d97706; }
+  
+  #mode-desc { font-size: 11px; line-height: 1.3; margin-top: 4px; color: #cbd5e1; }
+
+  /* Buttons & Sliders */
+  .row { display: flex; gap: 6px; margin-top: 4px; }
+  button {
+    flex: 1; background: #1c2230; color: #cbd5e1; border: 1px solid #2d3748;
+    border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer;
+    transition: all 0.15s; font-weight: 500;
+  }
+  button:hover { background: #2b3548; color: #fff; border-color: #4a5568; }
+  button.active { background: #2563eb; color: #fff; border-color: #3b82f6; }
+  input[type="range"] { width: 100%; margin: 6px 0; }
+</style>
+
+<!-- Three.js & OrbitControls (UMD build) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<div id="canvas-holder"></div>
+
+<!-- Left HUD: Controls & Upload -->
+<div id="hud">
+  <h1>DepthWizard M5 · 3D Terrain</h1>
+  <div class="subtitle">Monocular Elevation & Surface Modeling</div>
+
+  <label>Upload Image (GeoTIFF / PNG / JPG)</label>
+  <div class="upload-box">
+    <input type="file" id="file-input" accept=".tif,.tiff,.png,.jpg,.jpeg" />
+  </div>
+
+  <div id="status-box">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Startup Preview · Upload image to process</span>
+  </div>
+
+  <label>Height Exaggeration: <span id="exag-val">1.0</span>x</label>
+  <input type="range" id="exag" min="0.1" max="4.0" step="0.1" value="1.0" />
+
+  <label>Surface Overlay</label>
+  <div class="row">
+    <button id="btn-texture" class="active">RGB Texture</button>
+    <button id="btn-slope">Slope Map</button>
+    <button id="btn-conf">Confidence</button>
+  </div>
+
+  <label>Demo Samples</label>
+  <div class="row">
+    <button id="btn-demo-potsdam">Potsdam GeoTIFF</button>
+    <button id="btn-demo-sample">Photo PNG</button>
+  </div>
+</div>
+
+<!-- Right HUD: Metadata Readout -->
+<div id="meta-panel">
+  <h2>Image Metadata</h2>
+  <div id="mode-badge" class="startup">Startup Preview</div>
+  <div id="mode-desc">Awaiting input raster for monocular depth inference.</div>
+  
+  <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+    <div class="meta-row"><span class="meta-label">Dimensions:</span><span class="meta-val" id="m-dims">–</span></div>
+    <div class="meta-row"><span class="meta-label" id="lbl-elev-name">Span:</span><span class="meta-val" id="m-elev">–</span></div>
+    <div class="meta-row"><span class="meta-label">CRS:</span><span class="meta-val" id="m-crs">–</span></div>
+    <div class="meta-row"><span class="meta-label">GSD:</span><span class="meta-val" id="m-gsd">–</span></div>
+    <div class="meta-row"><span class="meta-label">Slope Range:</span><span class="meta-val" id="m-slope">–</span></div>
+    <div class="meta-row"><span class="meta-label">Mean Conf:</span><span class="meta-val" id="m-conf">–</span></div>
+  </div>
+</div>
+
+<!-- Bottom Left: Inspector -->
+<div id="info">
+  <div class="title">Terrain Raycast Inspector</div>
+  <div>Elevation: <span class="val" id="h-val">–</span></div>
+  <div>Slope Angle: <span class="val" id="s-val">–</span></div>
+  <div>Confidence: <span class="val" id="c-val">–</span></div>
+  <div class="desc">Hover or click anywhere on the 3D surface to inspect local spatial coordinates.</div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// THREE.JS SCENE SETUP
+// ---------------------------------------------------------------
+const container = document.getElementById('canvas-holder');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d13);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 18, 22);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+container.appendChild(renderer.domElement);
+
+let controls = null;
+if (typeof THREE.OrbitControls === 'function') {
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent below ground view
+}
+
+// ---------------------------------------------------------------
+// STATE VARIABLES
+// ---------------------------------------------------------------
+let terrainMesh = null;
+let currentMode = 'startup';
+let currentCalibrated = false;
+let exaggeration = 1.0;
+let overlayMode = 'texture'; // 'texture' | 'slope' | 'conf'
+let activeTexture = null;
+let currentHeights = null;
+let currentSlopes = null;
+let currentConfs = null;
+let currentGridSize = 256;
+const WORLD_SIZE = 20.0;
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
+sunLight.position.set(15, 25, 12);
+scene.add(sunLight);
+
+// Spatial Reference Ground Grid
+const gridHelper = new THREE.GridHelper(WORLD_SIZE * 1.3, 22, 0x223047, 0x151b26);
+gridHelper.position.y = -0.01;
+scene.add(gridHelper);
+
+// ---------------------------------------------------------------
+// COLORMAP HELPERS
+// ---------------------------------------------------------------
+function slopeToColor(slopeDeg, maxSlope) {
+  const t = Math.min(slopeDeg / Math.max(maxSlope, 30.0), 1.0);
+  const r = t < 0.5 ? t * 2.0 : 1.0;
+  const g = t < 0.5 ? 1.0 : Math.max(0.0, 1.0 - (t - 0.5) * 2.0);
+  const b = 0.10;
+  return [r, g, b];
+}
+
+function confToColor(confVal) {
+  const t = Math.max(0.0, Math.min(1.0, confVal));
+  if (t < 0.5) {
+    const k = t / 0.5;
+    return [1.0, k, 0.1];
+  } else {
+    const k = (t - 0.5) / 0.5;
+    return [1.0 - k, 0.9, 0.2 + 0.8 * k];
+  }
+}
+
+// ---------------------------------------------------------------
+// TERRAIN MESH BUILDER
+// ---------------------------------------------------------------
+function buildTerrain(heightData, slopeData, confData, size, texture) {
+  if (terrainMesh) {
+    scene.remove(terrainMesh);
+    terrainMesh.geometry.dispose();
+    terrainMesh.material.dispose();
+  }
+
+  currentHeights = heightData;
+  currentSlopes = slopeData;
+  currentConfs = confData;
+  currentGridSize = size;
+  if (texture) activeTexture = texture;
+
+  let hMin = Infinity, hMax = -Infinity, maxSlope = 0;
+  for (let i = 0; i < heightData.length; i++) {
+    const v = heightData[i];
+    if (v < hMin) hMin = v;
+    if (v > hMax) hMax = v;
+  }
+  for (let i = 0; i < slopeData.length; i++) {
+    if (slopeData[i] > maxSlope) maxSlope = slopeData[i];
+  }
+  if (!isFinite(hMin)) hMin = 0;
+  if (!isFinite(hMax)) hMax = 1;
+  const hSpan = (hMax - hMin) > 1e-4 ? (hMax - hMin) : 1.0;
+
+  const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, size - 1, size - 1);
+  geo.rotateX(-Math.PI / 2);
+
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+
+  // Scaled height for interactive 3D visual perception
+  const visualScale = (currentMode === 'absolute' && currentCalibrated) ? (WORLD_SIZE * 0.22 / hSpan) : (WORLD_SIZE * 0.25);
+
+  for (let i = 0; i < pos.count; i++) {
+    const rawH = heightData[i];
+    const normH = (rawH - hMin) / hSpan;
+    const yVal = normH * visualScale * exaggeration;
+    pos.setY(i, yVal);
+
+    let rgb = [1, 1, 1];
+    if (overlayMode === 'slope') {
+      rgb = slopeToColor(slopeData[i], maxSlope);
+    } else if (overlayMode === 'conf') {
+      rgb = confToColor(confData[i]);
+    }
+    colors[i * 3] = rgb[0];
+    colors[i * 3 + 1] = rgb[1];
+    colors[i * 3 + 2] = rgb[2];
+  }
+
+  pos.needsUpdate = true;
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: (overlayMode === 'slope' || overlayMode === 'conf'),
+    map: (overlayMode === 'texture') ? activeTexture : null,
+    roughness: 0.85,
+    metalness: 0.05,
+    flatShading: false
+  });
+
+  terrainMesh = new THREE.Mesh(geo, mat);
+  terrainMesh.userData = { size, hMin, hMax, hSpan };
+  scene.add(terrainMesh);
+}
+
+// ---------------------------------------------------------------
+// API INTEGRATION (REAL M2 BACKEND)
+// ---------------------------------------------------------------
+async function processAndRender(fileOrBlob, isSampleName = null) {
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+
+  statusDot.className = 'status-dot loading';
+  statusText.textContent = 'Processing image with Depth Anything V2...';
+
+  const formData = new FormData();
+  if (fileOrBlob instanceof File) {
+    formData.append('file', fileOrBlob);
+  } else {
+    formData.append('file', fileOrBlob, isSampleName || 'sample.tif');
+  }
+  formData.append('visual_size', '256');
+
+  try {
+    const resp = await fetch('/process', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Server returned status ${resp.status}: ${resp.statusText}`);
+    }
+
+    const data = await resp.json();
+    console.log("[DepthWizard] Received M2 result payload:", data);
+
+    currentMode = data.mode;
+    currentCalibrated = data.calibrated === true;
+    const vSize = data.visual_width;
+    const heightArray = new Float32Array(data.height_map);
+    const slopeArray = new Float32Array(data.slope_map);
+    const confArray = new Float32Array(data.confidence_map);
+    // Update UI & Metadata Panels
+    updateMetadataDisplay(data);
+
+    // Build 3D Terrain immediately
+    buildTerrain(heightArray, slopeArray, confArray, vSize, null);
+    statusDot.className = 'status-dot complete';
+    statusText.textContent = `Complete · ${data.width}×${data.height} (${data.mode.toUpperCase()}${data.calibrated ? ' · METRIC' : ''})`;
+
+    // Load RGB Texture into Three.js asynchronously
+    if (data.rgb) {
+      const texLoader = new THREE.TextureLoader();
+      texLoader.load(data.rgb, (texture) => {
+        texture.generateMipmaps = true;
+        texture.minFilter = THREE.LinearMipmapLinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        activeTexture = texture;
+        if (overlayMode === 'texture' && terrainMesh) {
+          terrainMesh.material.map = texture;
+          terrainMesh.material.needsUpdate = true;
+        }
+      }, undefined, (texErr) => {
+        console.warn("[TextureLoader Warning]", texErr);
+      });
+    }
+
+  } catch (err) {
+    console.error("[DepthWizard Error]", err);
+    statusDot.className = 'status-dot error';
+    statusText.textContent = `Error: ${err.message}`;
+  }
+}
+
+function updateMetadataDisplay(data) {
+  const badge = document.getElementById('mode-badge');
+  const modeDesc = document.getElementById('mode-desc');
+  const lblElevName = document.getElementById('lbl-elev-name');
+
+  if (data.calibrated === true) {
+    badge.className = 'absolute';
+    badge.textContent = 'Metric Absolute DSM';
+    modeDesc.textContent = 'Metric Surface Elevation (m)';
+    lblElevName.textContent = 'Elevation (m):';
+  } else if (data.georeferenced === true) {
+    badge.className = 'uncalibrated';
+    badge.textContent = 'Metric Calibration Required';
+    modeDesc.textContent = 'Relative Surface Height — metric calibration unavailable';
+    lblElevName.textContent = 'Relative Height:';
+  } else {
+    badge.className = 'relative';
+    badge.textContent = 'Relative rDSM Mode';
+    modeDesc.textContent = 'Relative Surface Height — Values are not metric elevations.';
+    lblElevName.textContent = 'Relative Height:';
+  }
+
+  document.getElementById('m-dims').textContent = `${data.width} × ${data.height}`;
+  document.getElementById('m-elev').textContent = `${data.height_min.toFixed(2)} → ${data.height_max.toFixed(2)} ${data.height_unit}`;
+  document.getElementById('m-crs').textContent = data.crs ? data.crs.split(' ')[0] : 'None (Relative)';
+  document.getElementById('m-gsd').textContent = (data.gsd_x && data.gsd_x > 0) ? `${data.gsd_x.toFixed(3)} m` : 'N/A';
+  document.getElementById('m-slope').textContent = `${data.slope_min.toFixed(1)}° → ${data.slope_max.toFixed(1)}°`;
+  document.getElementById('m-conf').textContent = `${(data.confidence_mean * 100).toFixed(1)}%`;
+}
+
+// ---------------------------------------------------------------
+// EVENT LISTENERS & UI HOOKS
+// ---------------------------------------------------------------
+document.getElementById('file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    processAndRender(file);
+  }
+});
+
+document.getElementById('exag').addEventListener('input', (e) => {
+  exaggeration = parseFloat(e.target.value);
+  document.getElementById('exag-val').textContent = exaggeration.toFixed(1);
+  if (currentHeights) {
+    buildTerrain(currentHeights, currentSlopes, currentConfs, currentGridSize, activeTexture);
+  }
+});
+
+document.getElementById('btn-texture').onclick = () => {
+  overlayMode = 'texture';
+  updateOverlayButtons('btn-texture');
+  if (currentHeights) buildTerrain(currentHeights, currentSlopes, currentConfs, currentGridSize, activeTexture);
+};
+
+document.getElementById('btn-slope').onclick = () => {
+  overlayMode = 'slope';
+  updateOverlayButtons('btn-slope');
+  if (currentHeights) buildTerrain(currentHeights, currentSlopes, currentConfs, currentGridSize, activeTexture);
+};
+
+document.getElementById('btn-conf').onclick = () => {
+  overlayMode = 'conf';
+  updateOverlayButtons('btn-conf');
+  if (currentHeights) buildTerrain(currentHeights, currentSlopes, currentConfs, currentGridSize, activeTexture);
+};
+
+function updateOverlayButtons(activeId) {
+  ['btn-texture', 'btn-slope', 'btn-conf'].forEach(id => {
+    document.getElementById(id).className = (id === activeId) ? 'active' : '';
+  });
+}
+
+// Sample buttons
+document.getElementById('btn-demo-potsdam').onclick = async () => {
+  const statusText = document.getElementById('status-text');
+  statusText.textContent = 'Fetching Potsdam Tile 2_10...';
+  const resp = await fetch('/data/potsdam/2_Ortho_RGB/top_potsdam_2_10_RGB.tif').catch(() => null);
+  if (resp && resp.ok) {
+    const blob = await resp.blob();
+    processAndRender(blob, 'top_potsdam_2_10_RGB.tif');
+  } else {
+    statusText.textContent = 'Please select file via the upload box above.';
+  }
+};
+
+document.getElementById('btn-demo-sample').onclick = async () => {
+  const resp = await fetch('/data/test_sample_photo.png').catch(() => null);
+  if (resp && resp.ok) {
+    const blob = await resp.blob();
+    processAndRender(blob, 'test_sample_photo.png');
+  }
+};
+
+// ---------------------------------------------------------------
+// INTERACTIVE TERRAIN RAYCAST INSPECTION
+// ---------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const hVal = document.getElementById('h-val');
+const sVal = document.getElementById('s-val');
+const cVal = document.getElementById('c-val');
+
+function inspectTerrain(e) {
+  if (!terrainMesh || !currentHeights) return;
+
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const hits = raycaster.intersectObject(terrainMesh);
+  if (hits.length > 0) {
+    const hit = hits[0];
+    const size = currentGridSize;
+    
+    // UV-based exact coordinate lookup
+    if (hit.uv) {
+      const gx = Math.min(size - 1, Math.max(0, Math.floor(hit.uv.x * size)));
+      const gz = Math.min(size - 1, Math.max(0, Math.floor((1.0 - hit.uv.y) * size)));
+      const idx = gz * size + gx;
+
+      const rawH = currentHeights[idx];
+      const slope = currentSlopes[idx];
+      const conf = currentConfs[idx];
+
+      if (currentMode === 'absolute' && currentCalibrated) {
+        hVal.textContent = `${rawH.toFixed(2)} m`;
+      } else if (currentMode === 'absolute' && !currentCalibrated) {
+        hVal.textContent = `${rawH.toFixed(3)} (uncalibrated)`;
+      } else if (currentMode === 'relative') {
+        hVal.textContent = `${rawH.toFixed(3)} (rel)`;
+      } else {
+        hVal.textContent = `${rawH.toFixed(3)} (demo)`;
+      }
+      sVal.textContent = `${slope.toFixed(1)}°`;
+      cVal.textContent = `${(conf * 100).toFixed(1)}%`;
+    }
+  }
+}
+
+window.addEventListener('mousemove', inspectTerrain);
+window.addEventListener('click', inspectTerrain);
+
+// ---------------------------------------------------------------
+// RESIZE & ANIMATION LOOP
+// ---------------------------------------------------------------
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (controls) controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
