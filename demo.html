@@ -1579,8 +1579,6 @@
     }, delay);
 
     try {
-      // demo.html is served directly by FastAPI at the Space origin.
-      // /process is also on the same FastAPI app, so a relative path always works.
       // Send processing requests to the Hugging Face backend.
       var resp = await fetch(API_BASE + '/process', {
         method: 'POST',
