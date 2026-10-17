@@ -614,7 +614,7 @@
 (function(){
   let selectedFile = null;
   let lastResult = null;
-  const API_BASE = '';
+  const API_BASE = 'https://eira06-depthwizard-backend.hf.space';
 
   // Three.js State
   let threeRenderer = null, threeScene = null, threeCamera = null, threeControls = null;
@@ -1581,12 +1581,20 @@
     try {
       // demo.html is served directly by FastAPI at the Space origin.
       // /process is also on the same FastAPI app, so a relative path always works.
-      var resp = await fetch('/process', { method: 'POST', body: formData });
+      // Send processing requests to the Hugging Face backend.
+      var resp = await fetch(API_BASE + '/process', {
+        method: 'POST',
+        body: formData
+      });
 
-      // Fallback to /api/process if needed
-      if (!resp || resp.status === 404) {
-        try { resp = await fetch('/api/process', { method: 'POST', body: formData }); } catch(e2){}
+      // Try the alternate route only if /process is not found.
+      if (resp.status === 404) {
+        resp = await fetch(API_BASE + '/api/process', {
+          method: 'POST',
+          body: formData
+        });
       }
+
 
       clearInterval(iv);
 
